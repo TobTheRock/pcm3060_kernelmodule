@@ -130,12 +130,13 @@ export LOCALVERSION := #
 localkernel: $(KDIR_LOCAL)
 	#$(MAKE) -C $(KDIR_LOCAL) defconfig
 	#sed -i "s|CONFIG_PREEMPT.*|CONFIG_PREEMPT=n|" $(KDIR_LOCAL)/.config
+	#TODO COPY correct config
 
 	$(MAKE) -C $(KDIR_LOCAL) prepare
 	#cp $(KMAKEFILE) $(KDIR_LOCAL)/Makefile
 	#$(MAKE) -C $(KDIR_LOCAL) -j$(NB_CORES_LOCAL) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) oldconfig
 	#sed -i "s|CONFIG_LOCALVERSION_AUTO=.*|CONFIG_LOCALVERSION_AUTO=n|" $(KDIR_LOCAL)/.config
-	$(MAKE) -C $(KDIR_LOCAL) -j$(NB_CORES_LOCAL)
+	#$(MAKE) -C $(KDIR_LOCAL) -j$(NB_CORES_LOCAL)
 
 	# unset LDFLAGS
 	# $(MAKE) -C $(KDIR) ${MAKEFLAGS} Image Image.gz modules
@@ -156,15 +157,17 @@ dtb: $(BUILD_DIR) $(subst $(DEVICETREE),$(BUILD_DIR),$(DEVICETREE_SOURCES)) $(KD
 	$(DTC_LOCAL) -I dts -O dtb  $(BUILD_DIR)/$(DT_NAME)-preprocessed.dts -o $(BUILD_DIR)/$(DT_NAME).dtb
 	# -iquote $(KDIR_LOCAL)/$(DTSI_ROOT)
 
-# install_test:
-# 	$(SSH) -t 'sudo insmod $(BUILD_DIR_REMOTE)/$(TARGET).ko &&\
-# 										   sudo rmmod $(BUILD_DIR_REMOTE)/$(TARGET).ko &&\
-# 										   sudo journalctl -kr'
+install_test:
+	$(RSYNC) -r $(BUILD_DIR)/$(TARGET).ko $(USER_REMOTE)@$(IP_REMOTE):$(BUILD_DIR_REMOTE)
+	$(SSH) -t 'sudo insmod $(BUILD_DIR_REMOTE)/$(TARGET).ko &&\
+										   sudo rmmod $(BUILD_DIR_REMOTE)/$(TARGET).ko &&\
+										   sudo journalctl -kr'
 install_dtb:
 	$(RSYNC) -r $(BUILD_DIR)/$(DT_NAME).dtb $(USER_REMOTE)@$(IP_REMOTE):$(BUILD_DIR_REMOTE)
 	$(SSH) -t ' sudo cp $(BUILD_DIR_REMOTE)/$(DT_NAME).dtb $(BOOT_REMOTE)/$(DT_NAME).dtb &&\
 		sudo sed -i "s|load mmc \$${devno}:1 \$${dtb_loadaddr} [^ ]*.dtb|load mmc \$${devno}:1 \$${dtb_loadaddr} /$(DT_NAME).dtb|" $(BOOT_REMOTE)/boot.ini &&\
 		sudo reboot'
+		
 else
 .PHONY += all clean test dtb
 all:
