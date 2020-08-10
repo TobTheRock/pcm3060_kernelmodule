@@ -1,0 +1,3 @@
+ControlMaster auto
+ControlPath ~/.ssh/master-%r@%h:%p
+IdentityFile /home/tobi/Development/odroidn2/cert/id_rsa

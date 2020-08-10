@@ -1,0 +1,49 @@
+https://github.com/hardkernel/linux/blob/odroidn2-4.9.y/include/dt-bindings/gpio/meson-g12a-gpio.h
+
+https://wiki.odroid.com/odroid-n2/application_note/gpio/1wire
+
+
+https://stackoverflow.com/questions/44930443/how-are-the-steps-to-access-gpios-in-linux-kernel-modules
+https://wiki.odroid.com/odroid-n2/application_note/gpio/memory_mapped_gpio
+
+
+https://stackoverflow.com/questions/20300149/how-to-add-a-peridic-timer-callback-in-a-linux-kernel-module
+https://embetronicx.com/tutorials/linux/device-drivers/using-high-resolution-timer-in-linux-device-driver/
+
+https://wiki.odroid.com/odroid-n2/hardware/expansion_connectors
+
+# LINUX
+
+#HR Timers for clock generations, check:
+cat /lib/modules/5.7.0-rc6-1-ARCH/build/.config | grep CONFIG_HIGH_RES_TIMERS
+CONFIG_HIGH_RES_TIMERS=y
+
+#DEVICE TREE
+
+This is not a Device Tree syntax issue, you just have to pre-process the .dts file with the C preprocessor, cpp, in order to obtain a file that can be digested by the Device Tree Compiler as is.
+
+In your specific case, assuming your current directory would be the kernel root directory, you would have to use the two following commands:
+
+cpp -nostdinc -I include -I arch  -undef -x assembler-with-cpp  arch/arm64/boot/dts/amlogic/meson-gxl-s905x-khadas-vim.dts meson-gxl-s905x-khadas-vim.dts.preprocessed
+
+dtc -I dts -O dtb -p 0x1000 meson-gxl-s905x-khadas-vim.dts.preprocessed -o kvim1.dtb
+
+kvim1.dtb: Warning (unit_address_vs_reg): Node /scpi/clocks/scpi_clocks@0 has a unit name, but no reg property
+kvim1.dtb: Warning (unit_address_vs_reg): Node /soc/bus@c8100000/pinctrl@14 has a unit name, but no reg property
+kvim1.dtb: Warning (unit_address_vs_reg): Node /soc/periphs@c8834000/rng has a reg or ranges property, but no unit name
+kvim1.dtb: Warning (unit_address_vs_reg): Node /soc/periphs@c8834000/pinctrl@4b0 has a unit name, but no reg property
+kvim1.dtb: Warning (unit_address_vs_reg): Node /soc/periphs@c8834000/eth-phy-mux has a reg or ranges property, but no unit name
+kvim1.dtb: Warning (unit_address_vs_reg): Node /gpio-keys-polled/button@0 has a unit name, but no reg property
+kvim1.dtb: Warning (simple_bus_reg): Node /soc/bus@c8100000/pinctrl@14 missing or empty reg/ranges property
+kvim1.dtb: Warning (simple_bus_reg): Node /soc/periphs@c8834000/rng simple-bus unit address format error, expected "0"
+kvim1.dtb: Warning (simple_bus_reg): Node /soc/periphs@c8834000/pinctrl@4b0 missing or empty reg/ranges property
+kvim1.dtb: Warning (simple_bus_reg): Node /soc/periphs@c8834000/eth-phy-mux simple-bus unit address format error, expected "55c"
+
+Verifying kvim1.dtb was built:
+
+ls -ail kvim1.tdb
+4359446 -rw-rw-r-- 1 user user 27568 Jun  2 12:05 kvim1.dtb
+
+
+## SPI
+https://e2e.ti.com/support/legacy_forums/embedded/linux/f/354/t/518439?How-to-call-SPI-protocol-driver-

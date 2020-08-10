@@ -1,0 +1,16 @@
+
+/ {
+	compatible = "hardkernel,odroid-n2", "amlogic,s922x", "amlogic,g12b";
+    pcm3060 {
+        compatible = "ext_pcm3060";
+        pwms = <&pwm_cd 0 1250 0>;
+        pwm-names = "pwm_pcm3060_sck1"; // TODO add SCK2
+        spis = <&spicc0>;
+        spi-names = "spi_pcm3060_adc";
+    };
+};
+
+&spicc0 {
+	status = "okay";
+    #list-cells = <0>;
+};

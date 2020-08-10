@@ -1,0 +1,63 @@
+#include "clock_generator.h"
+#include <linux/hrtimer.h>
+
+#ifndef CONFIG_DAC_CLOCK_SCK2_F_HZ
+#error CONFIG_DAC_CLOCK_SCK2_F_HZ not defined!
+#endif // !CONFIG_DAC_CLOCK_SCK2_F_HZ
+#ifndef CONFIG_DAC_RATIO_SCK2_FS_HZ
+#error CONFIG_DAC_RATIO_SCK2_FS_HZ not defined!
+#endif // !CONFIG_DAC_RATIO_SCK2_FS_HZ
+#ifndef CONFIG_DAC_RATIO_BCK2_FS_HZ
+#error CONFIG_DAC_RATIO_BCK2_FS_HZ not defined!
+#endif // !CONFIG_DAC_RATIO_BCK2_FS_HZ
+#ifndef CONFIG_DAC_RATIO_BCK2_LRCK_HZ
+#error CONFIG_DAC_RATIO_BCK2_LRCK_HZ not defined!
+#endif // !CONFIG_DAC_RATIO_BCK2_LRCK_HZ
+
+
+#define CLOCK_GENERATOR_DAC_CLOCK_SCK2_T_NS 10^9/(CONFIG_DAC_CLOCK_SCK2_F_HZ) // SCK clock period in nanoseconds
+#define DAC_SCK2_BCK2_RATIO ((CONFIG_DAC_RATIO_SCK2_FS_HZ)/(CONFIG_DAC_RATIO_BCK2_FS_HZ))
+#define CLOCK_GENERATOR_DAC_SCK2_LRCK_RATIO ((CONFIG_DAC_RATIO_SCK2_FS_HZ)/(CONFIG_DAC_RATIO_LRCK_FS_HZ))
+
+
+static struct hrtimer etx_hr_timer;
+static unsigned int count = 0;
+
+#include <linux/gpio.h> // TODO move to own file
+
+enum hrtimer_restart timer_callback(struct hrtimer *timer);
+
+
+int clock_generator_init(void)
+{
+    int ret = 0;
+    ktime_t ktime;
+    /* Init GPIO pins*/
+    // TODO
+    gpio_request(0, "A1");
+
+    /* Init timer */
+    ktime = ktime_set(0, CLOCK_GENERATOR_DAC_CLOCK_SCK2_T_NS);
+    hrtimer_init(&etx_hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    etx_hr_timer.function = &timer_callback;
+    hrtimer_start(&etx_hr_timer, ktime, HRTIMER_MODE_REL);
+
+    return ret;
+}
+
+int clock_generator_cleanup(void)
+{
+    hrtimer_cancel(&etx_hr_timer);
+
+    return 0;
+}
+
+//Timer Callback function. This will be called when timer expires
+enum hrtimer_restart timer_callback(struct hrtimer *timer)
+{
+     /* do your timer stuff here */
+    printk(KERN_INFO "Timer Callback function Called [%d]\n",count++);
+    hrtimer_forward_now(timer,ktime_set(0,CLOCK_GENERATOR_DAC_CLOCK_SCK2_T_NS));
+    return HRTIMER_RESTART;
+}
+ 
