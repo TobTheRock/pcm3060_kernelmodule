@@ -19,7 +19,7 @@
 
 #include "mesong12b_a.dtsi"
 #include "meson64_odroidn2.dtsi"
-#include "user.dtsi"
+#include  "user.dtsi"
 
 / {
 	model = "Hardkernel ODROID-N2";
