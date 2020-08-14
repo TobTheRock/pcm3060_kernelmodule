@@ -4,6 +4,7 @@
 
 #include <periphery/devices.h>
 #include <periphery/clock_generator.h>
+#include <periphery/transceiver.h>
 #include <utils/logging.h>
 // #include <ut>
 
@@ -12,11 +13,11 @@
 
 static int __init hello_world_init(void)
 {
-	INFO("Welcome to EmbeTronicX\n");
-    INFO("This is the Simple Module\n");
+	INFO("Welcome to TobiTronicX\n");
     INFO("Kernel Module Inserted Successfully...\n");
 
-    t_onProbe_cb cbs[] = {&clock_generator_init};
+    // t_onProbe_cb cbs[] = {&clock_generator_init, &tx_init};
+    t_onProbe_cb cbs[] = {&tx_init};
     register_device_pcm3060(cbs, ARRAY_SIZE(cbs));
     // clock_generator_init();
 	return 0;
@@ -25,7 +26,9 @@ static int __init hello_world_init(void)
 void __exit hello_world_exit(void)
 {
     // clock_generator_cleanup();
-    unregister_device_pcm3060_plain();
+
+    t_onRemove_cb fcbs[] = {&tx_cleanup};
+    unregister_device_pcm3060(fcbs, ARRAY_SIZE(fcbs));
 	printk(KERN_INFO "Kernel Module Removed Successfully...\n");
 }
 

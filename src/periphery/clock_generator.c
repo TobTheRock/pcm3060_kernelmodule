@@ -40,14 +40,14 @@ int clock_generator_init(struct device *pdev)
         INFO("Requesting PWM for SCK1");
         pwm_sck1_ptr = devm_pwm_get(pdev, CONFIG_DT_PCM3060_SCK1_PWMNAME);
         if (IS_ERR(pwm_sck1_ptr))
-        {            ERROR("Requesting PWM  for SCK2 failed %p", ERR_CAST(pwm_sck1_ptr));
+        {            ERROR("Requesting PWM  for SCK1 failed %p", ERR_CAST(pwm_sck1_ptr));
             ret = -EIO;
         }
     }
 
     if(!ret)
     {
-        INFO("Applying new state for SCK1: period[%dns], duty cycle[%d %%], polarity[%d], enable [%d]",
+        INFO("Applying new state for SCK1: period[%dns], duty cycle[%dns], polarity[%d], enable [%d]",
             new_sck1_state.period, new_sck1_state.duty_cycle, new_sck1_state.polarity, new_sck1_state.enabled);
         ret = pwm_apply_state(pwm_sck1_ptr, &new_sck1_state);
         INFO("Requested PWM");
@@ -56,8 +56,8 @@ int clock_generator_init(struct device *pdev)
     return ret;
 }
 
-void clock_generator_cleanup(void)
+int clock_generator_cleanup(struct device *pdev)
 {
     
-    return;
+    return 0;
 }

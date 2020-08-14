@@ -7,7 +7,7 @@
 #include <linux/pwm.h>
 
 int clock_generator_init(struct device *pdev);
-void clock_generator_cleanup(void);
+int clock_generator_cleanup(struct device *pdev);
 
 #endif // !KERNELMODULE_PCM3060_PERIPHERY_CLOCK_GENERATOR_H
 
