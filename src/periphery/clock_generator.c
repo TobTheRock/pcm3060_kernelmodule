@@ -15,6 +15,7 @@
 
 int clock_generator_init(struct device *pdev, const unsigned int frequency)
 {
+    DEBUG("Frequency %d Hz", frequency);
     int ret = 0,
         period = HZ_TO_NS(frequency);
     struct pwm_device* pwm_sck1_ptr;
