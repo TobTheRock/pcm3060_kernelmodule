@@ -5,7 +5,7 @@
 
 #include <linux/slab.h>
 #include <linux/mutex.h>
-#include <linx/types.h>
+//#include <linx/types.h>
 // #include <linux/string.h>
 
 DEFINE_MUTEX(_pcm3060_mutex);
@@ -67,7 +67,9 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
 
 pcm3060_t* get_pcm3060()
 {
-    _pcm3060_i.refcount++;
+    atomic_inc(&_pcm3060_i.refcount);
+
+    mutex_lock(&_pcm3060_mutex);
     if (_pcm3060_i.pcm3060_ext)
     {
         DEBUG("Already created a pcm3060, increasing ref count");
@@ -78,6 +80,7 @@ pcm3060_t* get_pcm3060()
         _pcm3060_i.pcm3060_ext = kmalloc(sizeof(pcm3060_t), GFP_KERNEL);
         _pcm3060_i.pcm3060_ext->init = &_configure_pcm3060;
     }
+    mutex_unlock(&_pcm3060_mutex);
 
     return _pcm3060_i.pcm3060_ext;
 }
@@ -85,7 +88,7 @@ pcm3060_t* get_pcm3060()
 
 void put_pcm3060(pcm3060_t* dev_pcm3060)
 {
-    if (_pcm3060_i.refcount == 0)
+    if (atomic_read(&_pcm3060_i.refcount) == 0)
     {
         WARNING("No pcm3060 was created yet!");
         return;
@@ -97,9 +100,7 @@ void put_pcm3060(pcm3060_t* dev_pcm3060)
     else
     {
         DEBUG("Decreasing refcount...");
-
-        _pcm3060_i.refcount--;
-        if (_pcm3060_i.refcount == 0)
+        if (atomic_dec_and_test(&_pcm3060_i.refcount))
         {
             t_onRemove_cb fcbs[] = {&_remove_pcm3060};
             DEBUG("Freeing pcm3060");

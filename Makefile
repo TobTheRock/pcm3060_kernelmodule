@@ -8,7 +8,7 @@ INCLUDE := include#
 EXPORT := pkg#
 SOURCE := src#
 TEST := test#
-TARGET := pcm3060#
+TARGET := pcm3060_module#
 CPP := cpp#
 
 ifdef HK_LINUX
@@ -57,8 +57,8 @@ BOOT_REMOTE := /boot
 ##
 .PHONY = install_test install_dtb
 
-SOURCES=$(shell find $(SOURCE)/* -type f -name '*.c')
-INCLUDES:=$(shell find $(SOURCE)/* -type f -name '*.h')
+SOURCES=$(shell find $(SOURCE) -type f -name '*.c')
+INCLUDES:=$(shell find $(SOURCE) -type f -name '*.h')
 BUILD_SOURCES:=$(subst $(SOURCE),$(BUILD_DIR),$(SOURCES))
 BUILD_INCLUDES:=$(subst $(SOURCE),$(BUILD_DIR),$(INCLUDES))
 TEST_SOURCES=$(wildcard $(TEST)/*.c)
@@ -96,6 +96,8 @@ $(BUILD_DIR)/%: $(SOURCE)/%
 
 	# Generate a Makefile with the needed obj-m and mymodule-objs set
 $(BUILD_DIR)/Makefile:
+	#$(BUILD_TEST_SOURCES)
+	#$(subst $(BUILD_DIR)/,,$(BUILD_TEST_SOURCES))
 	printf "obj-m += $(TARGET).o\n$(TARGET)-objs := $(subst $(TARGET).o,, $(subst .c,.o,$(subst $(BUILD_DIR)/,,$(BUILD_TEST_SOURCES))))" > $@
 	#echo "EXTRA_CFLAGS=-I$(BUILD_DIR_REMOTE)/include" >> $@
 
@@ -146,6 +148,7 @@ all: localkernel
 	$(MAKE) -C $(KDIR_LOCAL) M=$(PWD) modules
 
 test: $(BUILD_TEST_SOURCES) $(BUILD_DIR)/$(INCLUDE) $(BUILD_TEST_INCLUDES) $(BUILD_DIR)/Makefile #$(BUILD_INCLUDES) #localkernel
+
 	$(MAKE) -C $(KDIR_LOCAL)  M=$(BUILD_DIR) EXTRA_CFLAGS=-I$(BUILD_DIR) modules
 
 clean:
@@ -183,7 +186,7 @@ dtb:  $(BUILD_DIR) $(subst $(DEVICETREE),$(BUILD_DIR),$(DEVICETREE_SOURCES))
 
 test: $(BUILD_TEST_SOURCES)  $(BUILD_DIR)/$(INCLUDE) $(BUILD_TEST_INCLUDES) $(BUILD_DIR)/Makefile #$(BUILD_INCLUDES)
 
-	#@echo $(BUILD_TEST_INCLUDES)
+	#@echo $(BUILD_TEST_SOURCES)
 	#@echo $(PATH)
 	#@echo $(EXEC_MAKE)
 #	$(MAKE) -C $(KDIR) modules_prepare

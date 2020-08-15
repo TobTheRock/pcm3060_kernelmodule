@@ -3,20 +3,22 @@
 #include <periphery/pcm3060.h>
 
 #include <linux/cdev.h>
-// #include <linux/kdev_t.h>
+#include <linux/kdev_t.h>
 #include <linux/fs.h>
+#include <linux/device.h>
 
 #define CHRDEV_PCM3060_MINOR_START 0
 
 typedef struct _chrdev_pcm3060_data
 {
     struct cdev cdev;
-    pcm3060* pcm3060_p;
+    pcm3060_t* pcm3060;
 } _chrdev_pcm3060_data_t;
 
 static _chrdev_pcm3060_data_t _chrdev_pcm3060_data_array[CHRDEV_PCM3060_MAX_DEVICES];
 
-static int _chrdev_pcm3060_dev_major = 0;
+
+static dev_t _chrdev_pcm3060_dev = 0;
 static struct class *_chrdev_pcm3060_class = NULL;
 
 // static int my_read(struct file *file, char __user *user_buffer,
@@ -36,25 +38,56 @@ static struct class *_chrdev_pcm3060_class = NULL;
 //     return len;
 // }
 
-static int chrdev_pcm3060_open(struct inode *, struct file *);
+static int chrdev_pcm3060_open(struct inode * node, struct file * f)
 {
+    DEBUG("");
+    // TODO read from SYS CTL
+    pcm3060_config_t cfg = {
+        .sck_f =CONFIG_ADC_FS_HZ
+        };
+
     _chrdev_pcm3060_data_t *pcm3060_data =
-             container_of(inode->i_cdev, _chrdev_pcm3060_data_t, cdev);
+             container_of(node->i_cdev, _chrdev_pcm3060_data_t, cdev);
 
     /* validate access to device */
-    file->private_data = pcm3060_data;
+    f->private_data = pcm3060_data;
 
     /* initialize pcm3060 */
+    pcm3060_data->pcm3060 = get_pcm3060();
+    pcm3060_data->pcm3060->init(&cfg);
+}
+static int chrdev_pcm3060_release(struct inode *inode, struct file *file)
+{
+    DEBUG("");
+    return 0;
+}
 
+
+static long chrdev_pcm3060_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+    DEBUG("");
+    return 0;
+}
+
+static ssize_t chrdev_pcm3060_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
+{
+    DEBUG("");
+    return 0;
+}
+
+static ssize_t chrdev_pcm3060_write(struct file *file, const char __user *buf, size_t count, loff_t *offset)
+{
+    DEBUG("");
+    return 0;
 }
 
 const struct file_operations chrdev_pcm3060_fops = {
     .owner = THIS_MODULE,
-    .open = chrdev_pcm3060_open
-    // .read = my_read,
-    // .write = my_write,
-    // .release = my_release,
-    // .unlocked_ioctl = my_ioctl
+    .open = chrdev_pcm3060_open,
+    .read = chrdev_pcm3060_read,
+    .write = chrdev_pcm3060_write,
+    .release = chrdev_pcm3060_release,
+    .unlocked_ioctl = chrdev_pcm3060_ioctl
 };
 
 
@@ -62,14 +95,13 @@ int chrdev_pcm3060_register(const char* dev_name)
 {
     unsigned int i;
     
-    if( (alloc_chrdev_region(&dev, CHRDEV_PCM3060_MINOR_START, CHRDEV_PCM3060_MAX_DEVICES, dev_name)) < 0)
+    if( (alloc_chrdev_region(&_chrdev_pcm3060_dev, CHRDEV_PCM3060_MINOR_START, CHRDEV_PCM3060_MAX_DEVICES, dev_name)) < 0)
     {
             INFO("Cannot allocate major number for device 1\n");
             return -1;
     }
-    _chrdev_pcm3060_dev_major = MAJOR(dev);
 
-    INFO("Major = %d Minor = %d \n",MAJOR(dev), MINOR(dev));
+    INFO("Major = %d Minor = %d \n",MAJOR(_chrdev_pcm3060_dev), MINOR(_chrdev_pcm3060_dev));
 
     // create sysfs class
     _chrdev_pcm3060_class = class_create(THIS_MODULE, dev_name);
@@ -82,10 +114,10 @@ int chrdev_pcm3060_register(const char* dev_name)
         _chrdev_pcm3060_data_array[i].cdev.owner = THIS_MODULE;
 
         // add device to the system where "i" is a Minor number of the new device
-        cdev_add(&_chrdev_pcm3060_data_array[i].cdev, MKDEV(_chrdev_pcm3060_dev_major, i), 1);
+        cdev_add(&_chrdev_pcm3060_data_array[i].cdev, MKDEV(MAJOR(_chrdev_pcm3060_dev), i), 1);
 
         // create device node /dev/mychardev-x where "x" is "i", equal to the Minor number
-        device_create(_chrdev_pcm3060_class, NULL, MKDEV(_chrdev_pcm3060_dev_major, i), NULL, "%s-%d", dev_name, i);
+        device_create(_chrdev_pcm3060_class, NULL, MKDEV(MAJOR(_chrdev_pcm3060_dev), i), NULL, "%s-%d", dev_name, i);
     }
 
     return 0;
@@ -97,11 +129,11 @@ void chrdev_pcm3060_unregister(void)
 
     for (i = 0; i < CHRDEV_PCM3060_MAX_DEVICES; i++)
     {
-        device_destroy(_chrdev_pcm3060_class, MKDEV(_chrdev_pcm3060_dev_major, i));
+        device_destroy(_chrdev_pcm3060_class, MKDEV(MAJOR(_chrdev_pcm3060_dev), i));
     }
 
     class_unregister(_chrdev_pcm3060_class);
     class_destroy(_chrdev_pcm3060_class);
 
-    unregister_chrdev_region(MKDEV(_chrdev_pcm3060_dev_major, 0), MINORMASK);
+    unregister_chrdev_region(MKDEV(MAJOR(_chrdev_pcm3060_dev), 0), MINORMASK);
 }

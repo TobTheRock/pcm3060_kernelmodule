@@ -17,7 +17,7 @@ typedef struct pcm3060
 {
     //write
     //read
-    int (*init) (const pcm3060_config* const cfg);
+    int (*init) (const pcm3060_config_t* const cfg);
 } pcm3060_t;
 
 //alloacate and setup the struct
