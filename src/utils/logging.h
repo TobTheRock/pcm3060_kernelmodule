@@ -14,8 +14,10 @@
 #else
     #warning Kernel debug logging enabled!
     #define INFO(fmt,args...) printk(KERN_INFO CONFIG_LOGGING_NAME ": [%s] "fmt"\n", __FUNCTION__, ##args)
+    #define DEBUG(fmt,args...) printk(KERN_INFO CONFIG_LOGGING_NAME ": [%s] "fmt"\n", __FUNCTION__, ##args) // todo change this for KERN_DEBUG later
 #endif
 
+#define WARNING(fmt,args...) printk(KERN_WARNING CONFIG_LOGGING_NAME ": [%s] "fmt"\n", __FUNCTION__, ##args)
 #define ERROR(fmt,args...) printk(KERN_ERR CONFIG_LOGGING_NAME ": [%s] "fmt"\n", __FUNCTION__, ##args)
 
 #endif // !KERNELMODULE_PCM3060_UTILS_LOGGING_H

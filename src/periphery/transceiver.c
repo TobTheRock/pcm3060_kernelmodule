@@ -10,29 +10,35 @@
 #include <utils/logging.h>
 
 static struct spi_device* sdev;
-static struct spi_master	*master;
-static struct CONTROLLER	*c;
 
 int tx_init(struct device *pdev)
 {
-    unsigned char ch = 0xff;
+    unsigned char ch = 0xaa;
+    unsigned int test = 0;
+    int ret = 0;
     INFO("Requesting SPI for ADC");
     struct spi_device* sdev= spi_get(pdev, "spi_pcm3060_adc");
-    INFO("Got %p", sdev);
-    // INFO("Controller %p", sdev->controller); // not yet in kernel 4.9!
-    INFO("SPI device  mode %d", sdev->mode);
-    INFO("SPI device Master %p", sdev->master);
-    INFO("SPI device Master trans func %p", sdev->master->transfer_one);
-    INFO("SPI device  Master busnum  %d", sdev->master->bus_num);
-    INFO("SPI device  Master freq rang  %d - %d HZ", sdev->master->min_speed_hz, sdev->master->max_speed_hz);
+    if (!sdev)
+    {
+        ERROR("No spi device %s found", "spi_pcm3060_adc");
+        return ENXIO;
+    }
+    else
+    {
+        INFO("Got %p", sdev);
+        // INFO("Controller %p", sdev->controller); // not yet in kernel 4.9!
+        INFO("SPI device  mode %d", sdev->mode);
+        INFO("SPI device Master %p", sdev->master);
+        INFO("SPI device Master trans func %p", sdev->master->transfer_one);
+        INFO("SPI device  Master busnum  %d", sdev->master->bus_num);
+        INFO("SPI device  Master freq rang  %d - %d HZ", sdev->master->min_speed_hz, sdev->master->max_speed_hz);
 
+        sdev->max_speed_hz = CONFIG_ADC_CLOCK_BCK1_F_HZ;
+        sdev->mode = SPI_MODE_1; // CPOL = 0, CPHA = 1
+        sdev->bits_per_word = CONFIG_WORD_SIZE_PER_TX;
 
-    // master = spi_alloc_master(dev, sizeof *c);
-    // if (!master)
-    //     return -ENODEV;
-    // c = spi_master_get_devdata(master);
-    spi_write(sdev, &ch, sizeof(ch));
-
+        spi_setup(sdev);
+    }
 
 //pdev->dev->->of_node
 // then read the property---
