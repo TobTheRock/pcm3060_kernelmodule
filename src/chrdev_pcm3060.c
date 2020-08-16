@@ -1,5 +1,6 @@
 #include "chrdev_pcm3060.h"
 #include <utils/logging.h>
+#include <utils/ringbuffer.h>
 #include <periphery/pcm3060.h>
 
 #include <linux/cdev.h>
@@ -14,6 +15,7 @@ typedef struct _chrdev_pcm3060_data
 {
     struct cdev cdev;
     pcm3060_t* pcm3060;
+    ringbuffer_t* input_buffer;
 } _chrdev_pcm3060_data_t;
 
 static _chrdev_pcm3060_data_t _chrdev_pcm3060_data_array[CHRDEV_PCM3060_MAX_DEVICES];
@@ -63,10 +65,20 @@ static int chrdev_pcm3060_open(struct inode * node, struct file * f)
     if ( (pcm3060_data->pcm3060 = get_pcm3060()) == NULL)
     {
         ERROR("Failed to get PCM3060");
-        return -1;
+        goto r_fail;
+    }
+    else if ( (pcm3060_data->input_buffer = get_ringbuffer(10)) ) // TODO SIZE
+    {
+        ERROR("Failed to get Input ringbuffer");
+        goto r_pcm;
     }
 
-    return pcm3060_data->pcm3060->init(&cfg);
+    return pcm3060_data->pcm3060->init(&cfg); // TODO check this and release in case of error
+
+    r_pcm:
+        put_pcm3060(pcm3060_data->pcm3060);
+    r_fail:
+        return -1;
 }
 static int chrdev_pcm3060_release(struct inode *node, struct file *f)
 {
