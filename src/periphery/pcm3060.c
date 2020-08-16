@@ -54,10 +54,14 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
     if (_pcm3060_i.config)
     {
         ERROR("Reconfigure not implemented yet");
-        return 1;
+        return -1;
     }
 
-    _pcm3060_i.config = kmalloc(sizeof(pcm3060_config_t), GFP_KERNEL);
+    if ( (_pcm3060_i.config = kmalloc(sizeof(pcm3060_config_t), GFP_KERNEL)) == NULL)
+    {
+        ERROR("Failed to allocate memory in the kernel");
+        return -1;
+    }
     *(_pcm3060_i.config) = *cfg;
 
     register_driver_pcm3060(cbs, ARRAY_SIZE(cbs));
@@ -77,7 +81,12 @@ pcm3060_t* get_pcm3060()
     else
     {
         DEBUG("Creating new pcm3060");
-        _pcm3060_i.pcm3060_ext = kmalloc(sizeof(pcm3060_t), GFP_KERNEL);
+        if ( (_pcm3060_i.pcm3060_ext = kmalloc(sizeof(pcm3060_t), GFP_KERNEL)) == NULL)
+        {
+            ERROR("Failed to allocate memory in the kernel");
+            return NULL;
+        }
+        
         _pcm3060_i.pcm3060_ext->init = &_configure_pcm3060;
     }
     mutex_unlock(&_pcm3060_mutex);
@@ -86,7 +95,7 @@ pcm3060_t* get_pcm3060()
 }
 
 
-void put_pcm3060(pcm3060_t* dev_pcm3060)
+void put_pcm3060(pcm3060_t* const dev_pcm3060)
 {
     if (atomic_read(&_pcm3060_i.refcount) == 0)
     {

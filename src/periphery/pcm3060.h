@@ -23,7 +23,7 @@ typedef struct pcm3060
 //alloacate and setup the struct
 pcm3060_t* get_pcm3060(void);
 
-void put_pcm3060(pcm3060_t* dev_pcm3060);
+void put_pcm3060(pcm3060_t* const dev_pcm3060);
 
 
 #endif // !KERNELMODULE_PCM3060_PERIPHERY_PCM3060_H

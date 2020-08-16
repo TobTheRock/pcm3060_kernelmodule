@@ -6,6 +6,7 @@
 #include <linux/kdev_t.h>
 #include <linux/fs.h>
 #include <linux/device.h>
+#include <linux/slab.h>
 
 #define CHRDEV_PCM3060_MINOR_START 0
 
@@ -40,11 +41,17 @@ static struct class *_chrdev_pcm3060_class = NULL;
 
 static int chrdev_pcm3060_open(struct inode * node, struct file * f)
 {
-    DEBUG("");
     // TODO read from SYS CTL
     pcm3060_config_t cfg = {
         .sck_f =CONFIG_ADC_FS_HZ
         };
+    TRACE("");
+
+    if ( (node == NULL) || (f == NULL) )
+    {
+        ERROR("Invalid node/file pointer");
+        return -1;
+    }
 
     _chrdev_pcm3060_data_t *pcm3060_data =
              container_of(node->i_cdev, _chrdev_pcm3060_data_t, cdev);
@@ -53,31 +60,44 @@ static int chrdev_pcm3060_open(struct inode * node, struct file * f)
     f->private_data = pcm3060_data;
 
     /* initialize pcm3060 */
-    pcm3060_data->pcm3060 = get_pcm3060();
-    pcm3060_data->pcm3060->init(&cfg);
+    if ( (pcm3060_data->pcm3060 = get_pcm3060()) == NULL)
+    {
+        ERROR("Failed to get PCM3060");
+        return -1;
+    }
+
+    return pcm3060_data->pcm3060->init(&cfg);
 }
-static int chrdev_pcm3060_release(struct inode *inode, struct file *file)
+static int chrdev_pcm3060_release(struct inode *node, struct file *f)
 {
-    DEBUG("");
+    TRACE("");
+    if (f->private_data)
+    {
+        _chrdev_pcm3060_data_t *pcm3060_data = (_chrdev_pcm3060_data_t*) f->private_data;
+        put_pcm3060(pcm3060_data->pcm3060);
+    }
+
+    // kfree(f->private_data);
+
     return 0;
 }
 
 
 static long chrdev_pcm3060_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-    DEBUG("");
+    TRACE("");
     return 0;
 }
 
 static ssize_t chrdev_pcm3060_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
 {
-    DEBUG("");
+    TRACE("");
     return 0;
 }
 
 static ssize_t chrdev_pcm3060_write(struct file *file, const char __user *buf, size_t count, loff_t *offset)
 {
-    DEBUG("");
+    TRACE("");
     return 0;
 }
 
