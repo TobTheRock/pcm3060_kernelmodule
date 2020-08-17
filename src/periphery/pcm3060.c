@@ -95,7 +95,7 @@ pcm3060_t* get_pcm3060()
 }
 
 
-void put_pcm3060(pcm3060_t* const dev_pcm3060)
+void put_pcm3060(pcm3060_t* dev_pcm3060)
 {
     if (atomic_read(&_pcm3060_i.refcount) == 0)
     {
@@ -112,6 +112,8 @@ void put_pcm3060(pcm3060_t* const dev_pcm3060)
         if (atomic_dec_and_test(&_pcm3060_i.refcount))
         {
             t_onRemove_cb fcbs[] = {&_remove_pcm3060};
+            dev_pcm3060 = NULL;
+            //TODO this might be moved to removce fnc...
             DEBUG("Freeing pcm3060");
             kfree(_pcm3060_i.pcm3060_ext);
             kfree(_pcm3060_i.config);
