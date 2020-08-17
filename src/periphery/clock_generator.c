@@ -15,7 +15,6 @@
 
 int clock_generator_init(struct device *pdev, const unsigned int frequency)
 {
-    DEBUG("Frequency %d Hz", frequency);
     int ret = 0,
         period = HZ_TO_NS(frequency);
     struct pwm_device* pwm_sck1_ptr;
@@ -25,6 +24,7 @@ int clock_generator_init(struct device *pdev, const unsigned int frequency)
         .enabled = CLOCK_GENERATOR_CLK_PWM_ENABLE
     };
 
+    TRACE("Frequency %d Hz", frequency);
 
     if (!pdev)
     {

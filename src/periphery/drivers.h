@@ -6,6 +6,9 @@
 #ifndef KERNELMODULE_PCM3060_PERIPHERY_DRIVERS_H
 #define KERNELMODULE_PCM3060_PERIPHERY_DRIVERS_H
 
+
+//TODO use of_find_compatible_node instead?
+
 #include <linux/device.h>
 
 #define DEV_PCM3060_DRIVERNAME "driv_ext_pcm3060"

@@ -16,8 +16,10 @@ int tx_init(struct device *pdev)
     unsigned char ch = 0xaa;
     unsigned int test = 0;
     int ret = 0;
+    struct spi_device* sdev;
     INFO("Requesting SPI for ADC");
-    struct spi_device* sdev= spi_get(pdev, "spi_pcm3060_adc");
+
+    sdev = spi_get(pdev, "spi_pcm3060_adc");
     if (!sdev)
     {
         ERROR("No spi device %s found", "spi_pcm3060_adc");
