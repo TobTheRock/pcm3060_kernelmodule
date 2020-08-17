@@ -41,25 +41,23 @@ static struct class *_chrdev_pcm3060_class = NULL;
 //     return len;
 // }
 
-static int chrdev_pcm3060_open(struct inode * node, struct file * f)
+static int chrdev_pcm3060_open(struct inode * node, struct file * file)
 {
     // TODO read from SYS CTL
     pcm3060_config_t cfg = {
         .sck_f =CONFIG_ADC_FS_HZ
         };
+    _chrdev_pcm3060_data_t* pcm3060_data;
     TRACE("");
 
-    if ( (node == NULL) || (f == NULL) )
+    if ( (node == NULL) || (file == NULL) )
     {
         ERROR("Invalid node/file pointer");
         return -1;
     }
 
-    _chrdev_pcm3060_data_t *pcm3060_data =
-             container_of(node->i_cdev, _chrdev_pcm3060_data_t, cdev);
-
-    /* validate access to device */
-    f->private_data = pcm3060_data;
+    pcm3060_data = container_of(node->i_cdev, _chrdev_pcm3060_data_t, cdev);
+    file->private_data = pcm3060_data;
 
     /* initialize pcm3060 */
     if ( (pcm3060_data->pcm3060 = get_pcm3060()) == NULL)
@@ -67,7 +65,7 @@ static int chrdev_pcm3060_open(struct inode * node, struct file * f)
         ERROR("Failed to get PCM3060");
         goto r_fail;
     }
-    else if ( (pcm3060_data->input_buffer = get_ringbuffer(10)) ) // TODO SIZE
+    else if ( (pcm3060_data->input_buffer = get_ringbuffer(10)) == NULL ) // TODO SIZE
     {
         ERROR("Failed to get Input ringbuffer");
         goto r_pcm;
@@ -76,16 +74,17 @@ static int chrdev_pcm3060_open(struct inode * node, struct file * f)
     return pcm3060_data->pcm3060->init(&cfg); // TODO check this and release in case of error
 
     r_pcm:
-        put_pcm3060(pcm3060_data->pcm3060);
+        put_pcm3060(pcm3060_data->pcm3060); // TODO this crashes check via
     r_fail:
         return -1;
 }
-static int chrdev_pcm3060_release(struct inode *node, struct file *f)
+static int chrdev_pcm3060_release(struct inode *node, struct file *file)
 {
     TRACE("");
-    if (f->private_data)
+    if (file->private_data)
     {
-        _chrdev_pcm3060_data_t *pcm3060_data = (_chrdev_pcm3060_data_t*) f->private_data;
+        _chrdev_pcm3060_data_t *pcm3060_data = (_chrdev_pcm3060_data_t*) file->private_data;
+        put_ringbuffer(pcm3060_data->input_buffer);
         put_pcm3060(pcm3060_data->pcm3060);
     }
 
@@ -103,14 +102,39 @@ static long chrdev_pcm3060_ioctl(struct file *file, unsigned int cmd, unsigned l
 
 static ssize_t chrdev_pcm3060_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
 {
+    ssize_t ret = 0;
     TRACE("");
-    return 0;
+    if (file->private_data)
+    {
+        _chrdev_pcm3060_data_t* pcm3060_data = (_chrdev_pcm3060_data_t*) file->private_data;
+        ret = pcm3060_data->input_buffer->read_from_user(pcm3060_data->input_buffer, buf, count); // todo this must be an output buffer
+        *offset += ret;
+    }
+
+
+    return ret;
 }
 
 static ssize_t chrdev_pcm3060_write(struct file *file, const char __user *buf, size_t count, loff_t *offset)
 {
+    ssize_t ret = 0;
     TRACE("");
-    return 0;
+    if (file->private_data)
+    {
+        _chrdev_pcm3060_data_t* pcm3060_data = (_chrdev_pcm3060_data_t*) file->private_data;
+        if (pcm3060_data->input_buffer->write_from_user(pcm3060_data->input_buffer, buf, count))
+        {
+            ERROR("Writing to input wring buffer failed!");
+        }
+        else
+        {
+            ret = count;
+            *offset += count;
+        }
+    }
+
+
+    return ret;
 }
 
 const struct file_operations chrdev_pcm3060_fops = {
