@@ -17,9 +17,27 @@ typedef struct _ringbuffer_impl
 } _ringbuffer_impl_t;
 
 
+static inline unsigned int _get_ring_distance(const unsigned int start, const unsigned end, const unsigned ringsize)
+{
+    unsigned int distance;
+
+    if (end < start)
+    {
+        distance = ringsize - (start - end);
+    }
+    else
+    {
+        distance = end - start;
+    }
+
+    return distance;
+}
+
+
 static inline _ringbuffer_impl_t* get_ringbuffer_impl(const unsigned int size)
 {
     _ringbuffer_impl_t* newbuf;
+    TRACE("");
     if ((newbuf = kmalloc(sizeof(_ringbuffer_impl_t), GFP_KERNEL)) == NULL)
     {
         ERROR("Could not allocate kernel memory.");
@@ -48,8 +66,9 @@ static inline _ringbuffer_impl_t* get_ringbuffer_impl(const unsigned int size)
         return NULL;
 }
 
-static inline void put_ringbuffer_impl(_ringbuffer_impl_t* bufimpl)
+static inline void _put_ringbuffer_impl(_ringbuffer_impl_t* bufimpl)
 {
+    TRACE("");
     if (!bufimpl)
     {
         ERROR("Invalid buffer pointer!");
@@ -65,9 +84,10 @@ static inline void put_ringbuffer_impl(_ringbuffer_impl_t* bufimpl)
     }
 }
 
-static int _write_impl (struct ringbuffer* ring, const void* buf, const unsigned int buflen, bool fromUser)
+static inline int _write_impl (struct ringbuffer* ring, const void* buf, const unsigned int buflen, bool fromUser)
 {
     unsigned int ringbufsize;
+    TRACE("");
     if ((buf == NULL) || (ring == NULL))
     {
         ERROR("Invalid (ring)buffer");
@@ -90,25 +110,37 @@ static int _write_impl (struct ringbuffer* ring, const void* buf, const unsigned
     {
         int ret = 0;
         unsigned int bytesToEnd, bytesToWriteAtStart, bytesToWriteAtEnd,
-                     bytesWritten = atomic_read(&ring->_impl_p->writecnt);
-        mutex_lock(&ring->_impl_p->mx);
+                     bytesWritten, bytesRead, maxBytesWritable;
+
+        bytesWritten = atomic_read(&ring->_impl_p->writecnt);
+        bytesRead = atomic_read(&ring->_impl_p->readcnt);
+        maxBytesWritable = _get_ring_distance(bytesWritten, bytesRead, ringbufsize);
+
+        if (buflen >  maxBytesWritable )
+        {
+            ERROR("Ringbuffer overflow! Cannot write %d bytes, only space left for %d", buflen, maxBytesWritable);
+            return ENOMEM;
+        }
+
         bytesToEnd = ringbufsize - bytesWritten;
 
         bytesToWriteAtStart = (bytesToEnd < buflen) ? (buflen-bytesToEnd) : (0);
         bytesToWriteAtEnd = (bytesToWriteAtStart)? buflen : bytesToEnd;
 
+
+        mutex_lock(&ring->_impl_p->mx);
         if (fromUser)
         {
             if (copy_from_user( ring->_impl_p->buf + bytesWritten,
-                        buf, bytesToWriteAtEnd) != bytesToWriteAtEnd)
+                        buf, bytesToWriteAtEnd) != 0)
             {
-                ERROR("Could not copy memory");
+                ERROR("Could not copy memory at end");
                 ret = ENOMEM;
             }
             else if ( bytesToWriteAtStart &&
-                    (copy_from_user( ring->_impl_p->buf, buf, bytesToWriteAtStart) != bytesToWriteAtStart) )
+                    (copy_from_user( ring->_impl_p->buf, buf, bytesToWriteAtStart) != 0) )
             {
-                ERROR("Could not copy memory");
+                ERROR("Could not copy memory at front");
                 ret = ENOMEM;
             }
 
@@ -117,20 +149,23 @@ static int _write_impl (struct ringbuffer* ring, const void* buf, const unsigned
         {
             if ( memcpy( ring->_impl_p->buf + bytesWritten, buf, bytesToWriteAtEnd) == NULL)
             {
-                ERROR("Could not copy memory");
+                ERROR("Could not copy memory at end");
                 ret = ENOMEM;
             }
             else if ( bytesToWriteAtStart &&
                     (memcpy( ring->_impl_p->buf, buf, bytesToWriteAtStart) == NULL) )
             {
-                ERROR("Could not copy memory");
+                ERROR("Could not copy memory at front");
                 ret = ENOMEM;
             }
         }
-
-        TRACE("Setting new writecnt %d", (bytesWritten+buflen)%ringbufsize);
-        atomic_set(&ring->_impl_p->writecnt,
-                   (bytesWritten+buflen)%ringbufsize);
+    
+        if (!ret)
+        {
+            TRACE("Setting new writecnt %d", (bytesWritten+buflen)%ringbufsize);
+            atomic_set(&ring->_impl_p->writecnt,
+                    (bytesWritten+buflen)%ringbufsize);
+        }
 
         mutex_unlock(&ring->_impl_p->mx);
 
@@ -140,26 +175,110 @@ static int _write_impl (struct ringbuffer* ring, const void* buf, const unsigned
 
 static int _write (struct ringbuffer* ring, const void* buf, unsigned int buflen)
 {
-    _write_impl(ring, buf, buflen, 0);
+    TRACE("");
+    return _write_impl(ring, buf, buflen, 0);
 }
 
 static int _write_from_user (struct ringbuffer* ring, const void* buf, unsigned int buflen)
 {
-    _write_impl(ring, buf, buflen, 1);
+    TRACE("");
+    return _write_impl(ring, buf, buflen, 1);
 }
+
+static inline unsigned int _read_impl (struct ringbuffer* ring, void* buf, unsigned int buflen, bool fromUser)
+{
+    unsigned int ret_bytes_read = 0;
+    TRACE("");
+    if ((buf == NULL) || (ring == NULL))
+    {
+        ERROR("Invalid (ring)buffer");
+    }
+    else
+    {
+        unsigned int bytesToEnd, bytesToReadAtStart, bytesToReadAtEnd,
+                     bytesRead, bytesWritten, ringbufsize, nbytes_toread, maxBytesReadable;
+
+
+        ringbufsize = ring->_impl_p->bufsize;
+        mutex_lock(&ring->_impl_p->mx);
+
+        bytesRead = atomic_read(&ring->_impl_p->readcnt);
+        bytesWritten = atomic_read(&ring->_impl_p->writecnt);
+
+        maxBytesReadable = _get_ring_distance(bytesRead, bytesWritten , ringbufsize);
+
+        bytesToEnd = ringbufsize - bytesRead;
+        nbytes_toread = min(buflen, maxBytesReadable);
+
+        bytesToReadAtStart = (bytesToEnd < nbytes_toread) ? (nbytes_toread-bytesToEnd) : (0);
+        bytesToReadAtEnd = (bytesToReadAtStart)? nbytes_toread : bytesToEnd;
+        if (fromUser)
+        {
+            if (copy_to_user(buf, ring->_impl_p->buf + bytesRead,
+                            bytesToReadAtEnd) != 0)
+            {
+                ERROR("Could not copy memory from end");
+            }
+            else if ( bytesToReadAtStart &&
+                    (copy_to_user(buf, ring->_impl_p->buf, bytesToReadAtStart) != 0) )
+            {
+                ERROR("Could not copy memory from front");
+            }
+            else
+            {
+                ret_bytes_read = nbytes_toread;
+            }
+
+        }
+        else
+        {
+            if ( memcpy(buf, ring->_impl_p->buf + bytesRead, bytesToReadAtEnd) == NULL)
+            {
+                ERROR("Could not copy memory from end");
+            }
+            else if ( bytesToReadAtStart &&
+                    (memcpy(buf, ring->_impl_p->buf, bytesToReadAtStart) == NULL) )
+            {
+                ERROR("Could not copy memory from front");
+            }
+            else
+            {
+                ret_bytes_read = nbytes_toread;
+            }
+        }
+    
+        if (ret_bytes_read)
+        {
+            TRACE("Setting new readcnt %d", (bytesRead+nbytes_toread)%ringbufsize);
+            atomic_set(&ring->_impl_p->writecnt,
+                        (bytesRead+nbytes_toread)%ringbufsize);
+        }
+
+        mutex_unlock(&ring->_impl_p->mx);
+    }
+
+    return ret_bytes_read;
+}
+
+
+
 static unsigned int _read (struct ringbuffer* ring, void* buf, unsigned int buflen)
 {
-    
+    TRACE("");
+    return _read_impl(ring, buf, buflen, 0);
 }
+
 static unsigned int _read_from_user (struct ringbuffer* ring, void* buf, unsigned int buflen)
 {
-
+    TRACE("");
+    return _read_impl(ring, buf, buflen, 1);
 }
 
 
 ringbuffer_t* get_ringbuffer(const unsigned int size)
 {
     ringbuffer_t* newbuf;
+    TRACE("");
     if ((newbuf = kmalloc(sizeof(ringbuffer_t), GFP_KERNEL)) == NULL)
     {
         ERROR("Could not allocate kernel memory.");
@@ -190,6 +309,14 @@ ringbuffer_t* get_ringbuffer(const unsigned int size)
 
 void put_ringbuffer(ringbuffer_t* buf)
 {
+    TRACE("");
+    if (buf == NULL)
+    {
+        ERROR("Invalid ringbuffer");
+        return;
+    }
 
-
+    _put_ringbuffer_impl(buf->_impl_p);
+    kfree(buf);
+    buf = NULL;
 }

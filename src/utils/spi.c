@@ -21,7 +21,7 @@ int device_match_of_node(struct device *dev, void *np)
 struct spi_device *of_find_spi_device_by_node(struct device_node *node)
 {
 
-	/* pr_debug */pr_warn("%s(): Searching on bus %s \n", __func__, node->full_name);
+	// /* pr_debug */pr_warn("%s(): Searching on bus %s \n", __func__, node->full_name);
 	// struct device *dev = bus_find_device_by_name(&spi_bus_type, NULL, node->name);
 
 	struct device *dev = bus_find_device(&spi_bus_type, NULL, node, &device_match_of_node);
@@ -57,7 +57,7 @@ struct spi_device *spi_get(struct device *dev, const char *con_id)
 
 struct spi_device *of_spi_get(struct device_node *np, const char *con_id)
 {
-	struct spi_device *spi = NULL;
+	// struct spi_device *spi = NULL;
 	struct of_phandle_args args;
 	struct spi_device *sdev;
 	int index = 0;
