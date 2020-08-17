@@ -6,7 +6,7 @@
 #ifndef KERNELMODULE_PCM3060_UTILS_RINGBUFFER_H
 #define KERNELMODULE_PCM3060_UTILS_RINGBUFFER_H
 
-extern struct _ringbuffer_impl;
+struct _ringbuffer_impl;
 
 
 typedef struct ringbuffer
