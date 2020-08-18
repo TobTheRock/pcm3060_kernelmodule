@@ -182,6 +182,7 @@ int chrdev_pcm3060_register(const char* dev_name)
 void chrdev_pcm3060_unregister(void)
 {
     int i;
+    TRACE("");
 
     for (i = 0; i < CHRDEV_PCM3060_MAX_DEVICES; i++)
     {
