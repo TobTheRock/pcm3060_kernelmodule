@@ -1,6 +1,6 @@
 #include "chrdev_pcm3060.h"
 #include <utils/logging.h>
-#include <utils/ringbuffer.h>
+#include <utils/dualbuffer.h>
 #include <periphery/pcm3060.h>
 
 #include <linux/cdev.h>
@@ -15,7 +15,7 @@ typedef struct _chrdev_pcm3060_data
 {
     struct cdev cdev;
     pcm3060_t* pcm3060;
-    ringbuffer_t* input_buffer;
+    dualbuffer_t* input_buffer;
 } _chrdev_pcm3060_data_t;
 
 static _chrdev_pcm3060_data_t _chrdev_pcm3060_data_array[CHRDEV_PCM3060_MAX_DEVICES];
@@ -65,7 +65,7 @@ static int chrdev_pcm3060_open(struct inode * node, struct file * file)
         ERROR("Failed to get PCM3060");
         goto r_fail;
     }
-    else if ( (pcm3060_data->input_buffer = get_ringbuffer(10)) == NULL ) // TODO SIZE
+    else if ( (pcm3060_data->input_buffer = get_dualbuffer(10)) == NULL ) // TODO SIZE
     {
         ERROR("Failed to get Input ringbuffer");
         goto r_pcm;
@@ -84,7 +84,7 @@ static int chrdev_pcm3060_release(struct inode *node, struct file *file)
     if (file->private_data)
     {
         _chrdev_pcm3060_data_t *pcm3060_data = (_chrdev_pcm3060_data_t*) file->private_data;
-        put_ringbuffer(pcm3060_data->input_buffer);
+        put_dualbuffer(pcm3060_data->input_buffer);
         put_pcm3060(pcm3060_data->pcm3060);
     }
 
@@ -107,7 +107,7 @@ static ssize_t chrdev_pcm3060_read(struct file *file, char __user *buf, size_t c
     if (file->private_data)
     {
         _chrdev_pcm3060_data_t* pcm3060_data = (_chrdev_pcm3060_data_t*) file->private_data;
-        ret = pcm3060_data->input_buffer->read_from_user(pcm3060_data->input_buffer, buf, count); // todo this must be an output buffer
+        ret = pcm3060_data->input_buffer->copy_to_user(pcm3060_data->input_buffer, buf, count, 0); // todo this must be an output buffer
         *offset += ret;
     }
 
