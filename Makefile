@@ -69,8 +69,8 @@ SOURCES=$(shell find $(SOURCE) -type f -name '*.c')
 INCLUDES:=$(shell find $(SOURCE) -type f -name '*.h')
 BUILD_SOURCES:=$(subst $(SOURCE),$(BUILD_DIR_MODULE),$(SOURCES))
 BUILD_INCLUDES:=$(subst $(SOURCE),$(BUILD_DIR_MODULE),$(INCLUDES))
-TEST_SOURCES=$(shell find $(TEST) -type f -name '*.c')
-TEST_INCLUDES=$(shell find $(TEST) -type f -name '*.h')
+TEST_SOURCES=$(shell find $(TEST) -type f -name '*.cpp')
+TEST_INCLUDES=$(shell find $(TEST) -type f -name '*.hpp')
 BUILD_TEST_SOURCES=$(subst $(TEST),$(BUILD_DIR_TEST),$(TEST_SOURCES))
 # BUILD_TEST_SOURCES+=$(BUILD_SOURCES)
 BUILD_TEST_INCLUDES=$(subst $(TEST),$(BUILD_DIR_TEST),$(TEST_INCLUDES))
@@ -223,11 +223,11 @@ dtb:  $(BUILD_DIR_DTB) $(subst $(DEVICETREE),$(BUILD_DIR_DTB),$(DEVICETREE_SOURC
 
 test: $(BUILD_DIR_TEST) $(BUILD_TEST_SOURCES) $(BUILD_TEST_INCLUDES)  #$(BUILD_INCLUDES) #localkernel
 	@printf '%s\n' \
-			'CC=gcc' \
+			'CC=g++' \
 			'CFLAGS=-I.' \
-			'DEPS = $(subst $(TEST_TARGET).o,, $(subst .c,.o,$(subst $(BUILD_DIR_TEST)/,,$(BUILD_TEST_INCLUDES))))' \
-			'OBJ = $(subst $(TEST_TARGET).o,, $(subst .c,.o,$(subst $(BUILD_DIR_TEST)/,,$(BUILD_TEST_SOURCES))))' \
-			'%.o: %.c $$(DEPS)' > $(BUILD_DIR_TEST)/Makefile
+			'DEPS = $(subst $(TEST_TARGET).o,, $(subst .cpp,.o,$(subst $(BUILD_DIR_TEST)/,,$(BUILD_TEST_INCLUDES))))' \
+			'OBJ = $(subst $(TEST_TARGET).o,, $(subst .cpp,.o,$(subst $(BUILD_DIR_TEST)/,,$(BUILD_TEST_SOURCES))))' \
+			'%.o: %.cpp $$(DEPS)' > $(BUILD_DIR_TEST)/Makefile
 	@printf 	'\t$$(CC) -c -o $$@ $$< $$(CFLAGS)\n' >> $(BUILD_DIR_TEST)/Makefile
 	@printf	'$(TEST_TARGET): $$(OBJ)\n' >> $(BUILD_DIR_TEST)/Makefile
 	@printf		'\t $$(CC) -o $$@ $$^ $$(CFLAGS)' >> $(BUILD_DIR_TEST)/Makefile
@@ -243,7 +243,7 @@ install_dtb:
 		sudo reboot'
 
 install_test:
-	$(SSH) '$(BUILD_DIR_REMOTE)/test/$(TEST_TARGET)'
+	$(SSH) 'sudo $(BUILD_DIR_REMOTE)/test/$(TEST_TARGET)'
 endif
 
 
