@@ -273,6 +273,7 @@ static void _sync (struct buffer* this_buffer)
     //wait for writers to finish
     if (atomic_read(&this_buffer->_impl_p->n_active_writters))
     {
+        TRACE("Waiting...");
         spin_lock(&this_buffer->_impl_p->slock);
     }
 }
@@ -301,7 +302,7 @@ buffer_t* get_buffer(const unsigned int size)
     newbuf->write_from_user = &_write_from_user;
     newbuf->copy_to_user = &_copy_to_user;
     newbuf->reset = &_reset;
-    newbuf->reset = &_sync;
+    newbuf->sync = &_sync;
     newbuf->read = &_read;
     newbuf->get_n_bytes_readable = &_get_n_bytes_readable;
 
