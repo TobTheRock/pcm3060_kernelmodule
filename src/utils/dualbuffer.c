@@ -141,7 +141,7 @@ static unsigned int _read (struct dualbuffer* this_buffer, void* out_buffer_p, c
     if (this_buffer == NULL)
     {
         ERROR("Invalid buffer pointer");
-        return buflen;
+        return 0;
     }
     _switch_buf_start(this_buffer);
     n_bytes_dropped = this_buffer->_impl_p->read_buf->read(this_buffer->_impl_p->read_buf, out_buffer_p, off);
