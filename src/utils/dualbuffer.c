@@ -85,36 +85,9 @@ static unsigned int _write_from_user (struct dualbuffer* this_buffer, const void
     return this_buffer->_impl_p->write_buf->write_from_user(this_buffer->_impl_p->write_buf, buffer_ext, buflen);
 }
 
-static unsigned int _copy (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+static void _switch_buf_start (struct dualbuffer* this_buffer)
 {
-    TRACE("");
-    if (this_buffer == NULL)
-    {
-        ERROR("Invalid buffer pointer");
-        return buflen;
-    }
-    return this_buffer->_impl_p->read_buf->copy(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
-}
-static unsigned int _copy_to_user (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
-{
-    TRACE("");
-    if (this_buffer == NULL)
-    {
-        ERROR("Invalid buffer pointer");
-        return buflen;
-    }
-    return this_buffer->_impl_p->read_buf->copy_to_user(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
-}
-
-static unsigned int _read (struct dualbuffer* this_buffer, void* out_buffer_p, const unsigned int off)
-{
-    TRACE("");
-    if (this_buffer == NULL)
-    {
-        ERROR("Invalid buffer pointer");
-        return 0;
-    }
-
+    TRACE("Write buffer addr: %p, Read buffer addr: %p", this_buffer->_impl_p->write_buf, this_buffer->_impl_p->read_buf);
     if (atomic_inc_return(&this_buffer->_impl_p->n_active_readers) == 1) //first registered reader
     {
         //swap write and read buffers
@@ -125,8 +98,55 @@ static unsigned int _read (struct dualbuffer* this_buffer, void* out_buffer_p, c
         this_buffer->_impl_p->read_buf = tmp;
         this_buffer->_impl_p->read_buf->sync(this_buffer->_impl_p->read_buf); //wait for possible writers to finish before continuing
     }
+    TRACE("Write buffer addr: %p, Read buffer addr: %p", this_buffer->_impl_p->write_buf, this_buffer->_impl_p->read_buf);
+    return;
+}
 
-    return this_buffer->_impl_p->read_buf->read(this_buffer->_impl_p->read_buf, out_buffer_p, off);
+static inline void _switch_buf_end(struct dualbuffer* this_buffer)
+{
+
+    atomic_dec(&this_buffer->_impl_p->n_active_readers);
+}
+
+static unsigned int _copy (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+{
+    TRACE("");
+    if (this_buffer == NULL)
+    {
+        ERROR("Invalid buffer pointer");
+        return buflen;
+    }
+    _switch_buf_start(this_buffer);
+    return this_buffer->_impl_p->read_buf->copy(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
+}
+static unsigned int _copy_to_user (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+{
+    unsigned int n_bytes_dropped;
+    TRACE("");
+    if (this_buffer == NULL)
+    {
+        ERROR("Invalid buffer pointer");
+        return buflen;
+    }
+    _switch_buf_start(this_buffer);
+    n_bytes_dropped = this_buffer->_impl_p->read_buf->copy_to_user(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
+    _switch_buf_end(this_buffer);
+    return n_bytes_dropped;
+}
+
+static unsigned int _read (struct dualbuffer* this_buffer, void* out_buffer_p, const unsigned int off)
+{
+    unsigned int n_bytes_dropped;
+    TRACE("");
+    if (this_buffer == NULL)
+    {
+        ERROR("Invalid buffer pointer");
+        return buflen;
+    }
+    _switch_buf_start(this_buffer);
+    n_bytes_dropped = this_buffer->_impl_p->read_buf->read(this_buffer->_impl_p->read_buf, out_buffer_p, off);
+    _switch_buf_end(this_buffer);
+    return n_bytes_dropped;
 }
 
 static void _release_read (struct dualbuffer* this_buffer, void* buffer_ext)
@@ -139,7 +159,7 @@ static void _release_read (struct dualbuffer* this_buffer, void* buffer_ext)
     else
     {
         buffer_ext = NULL;
-        atomic_dec(&this_buffer->_impl_p->n_active_readers);
+        _switch_buf_end(this_buffer);
     }
 }
 
