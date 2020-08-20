@@ -5,18 +5,14 @@
 //#include <linux/mutex.h>
 #include <linux/err.h>
 #include <linux/of.h>
+#include <linux/kconfig.h>
 #include <linux/version.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,7,9)
 #if IS_ENABLED(CONFIG_OF)
 
+#include <utils/devicetree.h>
 #include <linux/device.h>
-
-int device_match_of_node(struct device *dev, void *np)
-{
-	/* pr_debug */pr_warn("%s(): Found dev %p \n", __func__, dev->of_node->name);
-	return dev->of_node == np;
-}
 /* must call put_device() when done with returned spi_device device */
 struct spi_device *of_find_spi_device_by_node(struct device_node *node)
 {
@@ -38,7 +34,6 @@ struct spi_device *of_find_spi_device_by_node(struct device_node *node)
 }
 #endif /* IS_ENABLED(CONFIG_OF) */
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5,7,9) */
-
 
 struct spi_device *of_spi_get(struct device_node *np, const char *con_id);
 
