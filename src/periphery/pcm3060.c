@@ -2,6 +2,7 @@
 #include <utils/logging.h>
 #include <periphery/devicetree.h>
 #include <periphery/clock_generator.h>
+#include <periphery/transceiver.h>
 
 #include <linux/slab.h>
 #include <linux/mutex.h>
@@ -35,6 +36,11 @@ static int _probe_pcm3060_device(struct device *pdev)
     {
         ERROR("Failed to initialize CLOCK!");
     }
+    else if ( (ret = tx_init(pdev, _pcm3060_i.config->bufin, _pcm3060_i.config->bufout)) )
+    {
+        ERROR("Failed to initialize TRANSCEIVER!");
+    }
+    
 
     return ret;
 }
@@ -44,6 +50,7 @@ static int _remove_pcm3060_device(struct device *pdev)
     int ret = 0;
     TRACE("");
     ret |= clock_generator_cleanup(pdev);
+    ret |= tx_cleanup(pdev);
     put_device(_pcm3060_i.pdev);
     return ret;
 }
@@ -67,7 +74,11 @@ static int _remove_pcm3060_device(struct device *pdev)
 static int _configure_pcm3060(const pcm3060_config_t* const cfg)
 {
     DEBUG("");
-
+    if (cfg == NULL)
+    {
+        ERROR("Invalid config ptr");
+        return -1;
+    }
     if (_pcm3060_i.config)
     {
         ERROR("Reconfigure not implemented yet");
@@ -80,6 +91,7 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
         return -1;
     }
     *(_pcm3060_i.config) = *cfg;
+    TRACE("cfg %p %p %d", _pcm3060_i.config->bufin, _pcm3060_i.config->bufout, _pcm3060_i.config->sck_f);
 
     return _probe_pcm3060_device(_pcm3060_i.pdev);
 }

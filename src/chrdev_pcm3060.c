@@ -16,6 +16,7 @@ typedef struct _chrdev_pcm3060_data
     struct cdev cdev;
     pcm3060_t* pcm3060;
     dualbuffer_t* input_buffer;
+    dualbuffer_t* output_buffer;
 } _chrdev_pcm3060_data_t;
 
 static _chrdev_pcm3060_data_t _chrdev_pcm3060_data_array[CHRDEV_PCM3060_MAX_DEVICES];
@@ -70,11 +71,21 @@ static int chrdev_pcm3060_open(struct inode * node, struct file * file)
         ERROR("Failed to get Input ringbuffer");
         goto r_pcm;
     }
+    else if ( (pcm3060_data->output_buffer = get_dualbuffer(10)) == NULL ) // TODO SIZE
+    {
+        ERROR("Failed to get Output ringbuffer");
+        goto r_buf;
+    }
+
+    cfg.bufin = pcm3060_data->input_buffer;
+    cfg.bufout = pcm3060_data->output_buffer;
 
     return pcm3060_data->pcm3060->init(&cfg); // TODO check this and release in case of error
 
+    r_buf:
+        put_dualbuffer(pcm3060_data->input_buffer);
     r_pcm:
-        put_pcm3060(pcm3060_data->pcm3060); // TODO this crashes check via
+        put_pcm3060(pcm3060_data->pcm3060);
     r_fail:
         return -1;
 }

@@ -7,10 +7,13 @@
 #define KERNELMODULE_PCM3060_PERIPHERY_PCM3060_H
 
 #include <linux/types.h>
+#include <utils/dualbuffer.h>
 
 typedef struct pcm3060_config
 {
     u32 sck_f; // frequency for sck in Hz
+    dualbuffer_t const* bufin;
+    dualbuffer_t const* bufout;
 } pcm3060_config_t;
 
 typedef struct pcm3060
