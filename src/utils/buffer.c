@@ -94,6 +94,7 @@ static inline unsigned int _write_impl (struct buffer* this_buffer, const void* 
         //first thread
         if (atomic_inc_return(&this_buffer->_impl_p->n_active_writters) == 1)
         {
+            TRACE("Locking");
             spin_lock(&this_buffer->_impl_p->slock);
         }
         // Synchronized block
@@ -119,17 +120,19 @@ static inline unsigned int _write_impl (struct buffer* this_buffer, const void* 
                 memcpy( this_buffer->_impl_p->buf + write_off_old, buffer_ext, n_bytes_to_write);
             }
         }
-        // finish wait for other reads and increase n_bytes_written(TODO)
         atomic_add(n_bytes_to_write, &this_buffer->_impl_p->n_bytes_written_tmp);
         if (atomic_dec_and_test(&this_buffer->_impl_p->n_active_writters))
         {
+            TRACE("Unlocking");
             spin_unlock(&this_buffer->_impl_p->slock);
+            TRACE("Increasing n_bytes_written");
+            atomic_add(atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp), &this_buffer->_impl_p->n_bytes_written);
         }
         else
         {
+            TRACE("Waiting for other threads...");
             spin_lock(&this_buffer->_impl_p->slock);
         }
-        atomic_add(atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp), &this_buffer->_impl_p->n_bytes_written);
         atomic_set(&this_buffer->_impl_p->n_bytes_written_tmp, 0);
     }
 

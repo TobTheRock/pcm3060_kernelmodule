@@ -88,14 +88,14 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
 pcm3060_t* get_pcm3060()
 {
 
-    mutex_lock(&_pcm3060_mutex);
-    if (_pcm3060_i.pcm3060_ext)
+    if (atomic_inc_return(&_pcm3060_i.refcount) > 1)
     {
         DEBUG("Already created a pcm3060, increasing ref count");
     }
     else
     {
         DEBUG("Creating new pcm3060");
+        mutex_lock(&_pcm3060_mutex);
         if ( (_pcm3060_i.pcm3060_ext = kmalloc(sizeof(pcm3060_t), GFP_KERNEL)) == NULL)
         {
             ERROR("Failed to allocate memory in the kernel");
@@ -110,10 +110,8 @@ pcm3060_t* get_pcm3060()
         {
             _pcm3060_i.pcm3060_ext->init = &_configure_pcm3060;
         }
-        
+        mutex_unlock(&_pcm3060_mutex);
     }
-    atomic_inc(&_pcm3060_i.refcount);
-    mutex_unlock(&_pcm3060_mutex);
 
     return _pcm3060_i.pcm3060_ext;
     r_str:
@@ -139,10 +137,12 @@ void put_pcm3060(pcm3060_t* dev_pcm3060)
         DEBUG("Decreasing refcount...");
         if (atomic_dec_and_test(&_pcm3060_i.refcount))
         {
-            _remove_pcm3060_device(_pcm3060_i.pdev);
             DEBUG("Freeing pcm3060");
+            _remove_pcm3060_device(_pcm3060_i.pdev);
             kfree(_pcm3060_i.pcm3060_ext);
             kfree(_pcm3060_i.config);
+            _pcm3060_i.pcm3060_ext = NULL;
+            _pcm3060_i.config = NULL;
             dev_pcm3060 = NULL;
         }
     }
