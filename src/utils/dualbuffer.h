@@ -16,15 +16,15 @@ typedef struct dualbuffer
     unsigned int (* write_from_user) (struct dualbuffer* this_buffer, const void* buffer_ext, const unsigned int buflen);
 
     // return NOF bytes not copied
-    unsigned int (* copy) (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
-    unsigned int (* copy_to_user) (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
+    unsigned int (* copy) (const struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
+    unsigned int (* copy_to_user) (const struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
 
     //direct read, returns NOF bytes readible,
-    unsigned int (* read) (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int off);
-    void (* release_read) (struct dualbuffer* this_buffer, void* buffer_ext);
+    unsigned int (* read) (const struct dualbuffer* this_buffer, void** buffer_ext, const unsigned int off);
+    void (* release_read) (const struct dualbuffer* this_buffer, void** buffer_ext);
     
     //get nof readable bytes
-    unsigned int (* get_n_bytes_readable) (struct dualbuffer* this_buffer);
+    unsigned int (* get_n_bytes_readable) (const struct dualbuffer* this_buffer);
 
     //resets the dualbuffer, pointers from read are still valied, but may contain outdated data
     void (* reset) (struct dualbuffer* this_buffer);

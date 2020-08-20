@@ -12,8 +12,7 @@
 typedef struct pcm3060_config
 {
     u32 sck_f; // frequency for sck in Hz
-    dualbuffer_t const* bufin;
-    dualbuffer_t const* bufout;
+    u32 buf_size; // i/o buffer size in byte
 } pcm3060_config_t;
 
 typedef struct pcm3060
@@ -21,6 +20,8 @@ typedef struct pcm3060
     //write
     //read
     int (*init) (const pcm3060_config_t* const cfg);
+    dualbuffer_t*const input_buffer;
+    dualbuffer_t*const output_buffer;
 } pcm3060_t;
 
 //alloacate and setup the struct

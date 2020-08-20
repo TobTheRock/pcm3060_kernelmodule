@@ -85,31 +85,33 @@ static unsigned int _write_from_user (struct dualbuffer* this_buffer, const void
     return this_buffer->_impl_p->write_buf->write_from_user(this_buffer->_impl_p->write_buf, buffer_ext, buflen);
 }
 
-static void _switch_buf_start (struct dualbuffer* this_buffer)
+static void _switch_buf_start (const struct dualbuffer* this_buffer)
 {
-    TRACE("Write buffer addr: %p, Read buffer addr: %p", this_buffer->_impl_p->write_buf, this_buffer->_impl_p->read_buf);
-    if (atomic_inc_return(&this_buffer->_impl_p->n_active_readers) == 1) //first registered reader
+    if ( (atomic_inc_return(&this_buffer->_impl_p->n_active_readers) == 1) &&  //first registered reader
+         (this_buffer->_impl_p->write_buf->get_n_bytes_readable(this_buffer->_impl_p->write_buf)) > 0 ) // Only switch if bytes have been written
     {
         //swap write and read buffers
         buffer_t* tmp = this_buffer->_impl_p->write_buf;
         DEBUG("Swapping buffers");
+        TRACE("Write buffer addr: %p, Read buffer addr: %p", this_buffer->_impl_p->write_buf, this_buffer->_impl_p->read_buf);
         this_buffer->_impl_p->read_buf->reset(this_buffer->_impl_p->read_buf);
         this_buffer->_impl_p->write_buf = this_buffer->_impl_p->read_buf;
         this_buffer->_impl_p->read_buf = tmp;
         this_buffer->_impl_p->read_buf->sync(this_buffer->_impl_p->read_buf); //wait for possible writers to finish before continuing
+        TRACE("Write buffer addr: %p, Read buffer addr: %p", this_buffer->_impl_p->write_buf, this_buffer->_impl_p->read_buf);
     }
-    TRACE("Write buffer addr: %p, Read buffer addr: %p", this_buffer->_impl_p->write_buf, this_buffer->_impl_p->read_buf);
     return;
 }
 
-static inline void _switch_buf_end(struct dualbuffer* this_buffer)
+static inline void _switch_buf_end(const struct dualbuffer* this_buffer)
 {
-
+    TRACE("");
     atomic_dec(&this_buffer->_impl_p->n_active_readers);
 }
 
-static unsigned int _copy (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+static unsigned int _copy (const struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
 {
+    unsigned int n_bytes_dropped;
     TRACE("");
     if (this_buffer == NULL)
     {
@@ -117,9 +119,11 @@ static unsigned int _copy (struct dualbuffer* this_buffer, void* buffer_ext, con
         return buflen;
     }
     _switch_buf_start(this_buffer);
-    return this_buffer->_impl_p->read_buf->copy(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
+    n_bytes_dropped = this_buffer->_impl_p->read_buf->copy(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
+    _switch_buf_end(this_buffer);
+    return n_bytes_dropped;
 }
-static unsigned int _copy_to_user (struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+static unsigned int _copy_to_user (const struct dualbuffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
 {
     unsigned int n_bytes_dropped;
     TRACE("");
@@ -134,7 +138,7 @@ static unsigned int _copy_to_user (struct dualbuffer* this_buffer, void* buffer_
     return n_bytes_dropped;
 }
 
-static unsigned int _read (struct dualbuffer* this_buffer, void* out_buffer_p, const unsigned int off)
+static unsigned int _read (const struct dualbuffer* this_buffer, void** out_buffer_p, const unsigned int off)
 {
     unsigned int n_bytes_dropped;
     TRACE("");
@@ -144,12 +148,10 @@ static unsigned int _read (struct dualbuffer* this_buffer, void* out_buffer_p, c
         return 0;
     }
     _switch_buf_start(this_buffer);
-    n_bytes_dropped = this_buffer->_impl_p->read_buf->read(this_buffer->_impl_p->read_buf, out_buffer_p, off);
-    _switch_buf_end(this_buffer);
-    return n_bytes_dropped;
+    return this_buffer->_impl_p->read_buf->read(this_buffer->_impl_p->read_buf, out_buffer_p, off);
 }
 
-static void _release_read (struct dualbuffer* this_buffer, void* buffer_ext)
+static void _release_read (const struct dualbuffer* this_buffer, void** buffer_ext)
 {
     if (this_buffer == NULL)
     {
@@ -164,7 +166,7 @@ static void _release_read (struct dualbuffer* this_buffer, void* buffer_ext)
 }
 
 
-static unsigned int _get_n_bytes_readable (struct dualbuffer* this_buffer)
+static unsigned int _get_n_bytes_readable (const struct dualbuffer* this_buffer)
 {
     if (this_buffer == NULL)
     {

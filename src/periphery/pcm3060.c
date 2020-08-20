@@ -36,7 +36,7 @@ static int _probe_pcm3060_device(struct device *pdev)
     {
         ERROR("Failed to initialize CLOCK!");
     }
-    else if ( (ret = tx_init(pdev, _pcm3060_i.config->bufin, _pcm3060_i.config->bufout)) )
+    else if ( (ret = tx_init(pdev, _pcm3060_i.pcm3060_ext->input_buffer, _pcm3060_i.pcm3060_ext->output_buffer)) )
     {
         ERROR("Failed to initialize TRANSCEIVER!");
     }
@@ -73,7 +73,7 @@ static int _remove_pcm3060_device(struct device *pdev)
 
 static int _configure_pcm3060(const pcm3060_config_t* const cfg)
 {
-    DEBUG("");
+    TRACE("");
     if (cfg == NULL)
     {
         ERROR("Invalid config ptr");
@@ -81,8 +81,8 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
     }
     if (_pcm3060_i.config)
     {
-        ERROR("Reconfigure not implemented yet");
-        return -1;
+        WARNING("Reconfigure not implemented yet");
+        return 0;
     }
 
     if ( (_pcm3060_i.config = kmalloc(sizeof(pcm3060_config_t), GFP_KERNEL)) == NULL)
@@ -90,16 +90,31 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
         ERROR("Failed to allocate memory in the kernel");
         return -1;
     }
+    else if ( (*(dualbuffer_t**)&_pcm3060_i.pcm3060_ext->input_buffer = get_dualbuffer(cfg->buf_size)) == NULL )
+    {
+        ERROR("Failed to get Input buffer");
+        goto r_conf;
+    }
+    else if ( (*(dualbuffer_t**)&_pcm3060_i.pcm3060_ext->output_buffer = get_dualbuffer(cfg->buf_size)) == NULL )
+    {
+        ERROR("Failed to get Output buffer");
+        goto r_buf;
+    }
+
     *(_pcm3060_i.config) = *cfg;
-    TRACE("cfg %p %p %d", _pcm3060_i.config->bufin, _pcm3060_i.config->bufout, _pcm3060_i.config->sck_f);
 
     return _probe_pcm3060_device(_pcm3060_i.pdev);
+    r_conf:
+        kfree(_pcm3060_i.config);
+    r_buf:
+        put_dualbuffer(_pcm3060_i.pcm3060_ext->input_buffer);
+    return -1;
 }
 
 
 pcm3060_t* get_pcm3060()
 {
-
+    TRACE("");
     if (atomic_inc_return(&_pcm3060_i.refcount) > 1)
     {
         DEBUG("Already created a pcm3060, increasing ref count");
@@ -129,12 +144,14 @@ pcm3060_t* get_pcm3060()
     r_str:
         kfree(_pcm3060_i.pcm3060_ext);
     r_null:
+        mutex_unlock(&_pcm3060_mutex);
         return NULL;
 }
 
 
 void put_pcm3060(pcm3060_t* dev_pcm3060)
 {
+    TRACE("");
     if (atomic_read(&_pcm3060_i.refcount) == 0)
     {
         WARNING("No pcm3060 was created yet!");
@@ -153,6 +170,8 @@ void put_pcm3060(pcm3060_t* dev_pcm3060)
             _remove_pcm3060_device(_pcm3060_i.pdev);
             kfree(_pcm3060_i.pcm3060_ext);
             kfree(_pcm3060_i.config);
+            put_dualbuffer((struct dualbuffer *)_pcm3060_i.pcm3060_ext->input_buffer);
+            put_dualbuffer((struct dualbuffer *)_pcm3060_i.pcm3060_ext->output_buffer);
             _pcm3060_i.pcm3060_ext = NULL;
             _pcm3060_i.config = NULL;
             dev_pcm3060 = NULL;

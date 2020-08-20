@@ -125,7 +125,7 @@ static inline unsigned int _write_impl (struct buffer* this_buffer, const void* 
         {
             TRACE("Unlocking");
             spin_unlock(&this_buffer->_impl_p->slock);
-            TRACE("Increasing n_bytes_written");
+            TRACE("Increasing n_bytes_written %d", atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp));
             atomic_add(atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp), &this_buffer->_impl_p->n_bytes_written);
         }
         else
@@ -151,7 +151,7 @@ static unsigned int _write_from_user (struct buffer* this_buffer, const void* bu
     return _write_impl(this_buffer, buffer_ext, buflen, 1);
 }
 
-static inline unsigned int  _copy_impl (struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off, bool fromUser)
+static inline unsigned int  _copy_impl (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off, bool fromUser)
 {
     unsigned int n_bytes_dropped = 0, n_bytes_available, n_bytes_to_copy;
     TRACE("");
@@ -191,18 +191,18 @@ static inline unsigned int  _copy_impl (struct buffer* this_buffer, void* buffer
     return n_bytes_dropped;
 }
 
-static unsigned int _copy (struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+static unsigned int _copy (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
 {
     TRACE("");
     return _copy_impl(this_buffer, buffer_ext, buflen, off, 0);
 }
-static unsigned int _copy_to_user (struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+static unsigned int _copy_to_user (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
 {
     TRACE("");
     return _copy_impl(this_buffer, buffer_ext, buflen, off, 1);
 }
 
-static unsigned int _read (struct buffer* this_buffer, void* out_buffer_p, const unsigned int off)
+static unsigned int _read (const struct buffer* this_buffer, void** out_buffer_p, const unsigned int off)
 {
     unsigned int n_bytes_available = 0;
     if ((this_buffer == NULL))
@@ -215,21 +215,21 @@ static unsigned int _read (struct buffer* this_buffer, void* out_buffer_p, const
         WARNING("Overwriting existing buffer pointer %p", out_buffer_p);
     }
 
-    if (off >= (n_bytes_available = atomic_read(&this_buffer->_impl_p->n_bytes_written)))
+    if (off > (n_bytes_available = atomic_read(&this_buffer->_impl_p->n_bytes_written)))
     {
         ERROR("Offset %d exceeds nof buffered values %d", off, n_bytes_available);
     }
     else
     {
         n_bytes_available -= off;
+        out_buffer_p = this_buffer->_impl_p->buf + off;
     }
     
-    out_buffer_p = this_buffer->_impl_p->buf + off;
     
     return n_bytes_available;
 }
 
-static unsigned int _get_n_bytes_readable (struct buffer* this_buffer)
+static unsigned int _get_n_bytes_readable (const struct buffer* this_buffer)
 {
     if ((this_buffer == NULL))
     {

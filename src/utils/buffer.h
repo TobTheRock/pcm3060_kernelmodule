@@ -16,14 +16,14 @@ typedef struct buffer
     unsigned int (* write_from_user) (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen);
 
     // return NOF bytes not copied
-    unsigned int (* copy) (struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
-    unsigned int (* copy_to_user) (struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
+    unsigned int (* copy) (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
+    unsigned int (* copy_to_user) (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
 
     //direct read, returns NOF bytes readible,
-    unsigned int (* read) (struct buffer* this_buffer, void* out_buffer_p, const unsigned int off);
+    unsigned int (* read) (const struct buffer* this_buffer, void** out_buffer_p, const unsigned int off);
     
     //get nof readable bytes
-    unsigned int (* get_n_bytes_readable) (struct buffer* this_buffer);
+    unsigned int (* get_n_bytes_readable) (const struct buffer* this_buffer);
 
     //resets the buffer, pointers from read are still valied, but may contain outdated data
     void (*reset) (struct buffer* this_buffer);
