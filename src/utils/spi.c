@@ -40,7 +40,8 @@ struct spi_device *of_spi_get(struct device_node *np, const char *con_id);
 struct spi_device *spi_get(struct device *dev, const char *con_id)
 {
 	struct spi_device *spi = ERR_PTR(-EPROBE_DEFER);
-	const char *dev_id = dev ? dev_name(dev) : NULL;
+	// const char *dev_id = dev ? dev_name(dev) : NULL;
+	
 
 	/* look up via DT first */
 	if (IS_ENABLED(CONFIG_OF) && dev && dev->of_node)
@@ -58,30 +59,28 @@ struct spi_device *of_spi_get(struct device_node *np, const char *con_id)
 	int index = 0;
 	int err;
 
-	/* pr_debug */pr_warn("%s(): \n", __func__);
-
 	if (con_id) {
 
-	/* pr_debug */pr_warn("%s(): conid \n", __func__);
+	pr_debug("%s(): conid \n", __func__);
 		index = of_property_match_string(np, "spi-names", con_id);
 		if (index < 0){
-			/* pr_debug */pr_warn("%s(): pr match fail \n", __func__);
+			pr_debug("%s(): pr match fail \n", __func__);
 			return ERR_PTR(index);
 		}
 	}
 
-	/* pr_debug */pr_warn("%s(): parse \n", __func__);
+	pr_debug("%s(): parse \n", __func__);
 	err = of_parse_phandle_with_args(np, "spis", "#list-cells", index,
 					 &args);
 	if (err) {
-		/* pr_debug */pr_warn("%s(): can't parse \"spis\" property\n", __func__);
+		pr_debug("%s(): can't parse \"spis\" property\n", __func__);
 		return ERR_PTR(err);
 	}
 
-	/* pr_debug */pr_warn("%s(): find \n", __func__);
+	pr_debug("%s(): find \n", __func__);
 	sdev = of_find_spi_device_by_node(args.np);
 	if (IS_ERR(sdev)) {
-		/* pr_debug */pr_warn("%s(): SPI device not found\n", __func__);
+		pr_debug("%s(): SPI device not found\n", __func__);
 		goto put;
 	}
 
