@@ -41,7 +41,6 @@ static struct class *_chrdev_pcm3060_class = NULL;
 
 static int chrdev_pcm3060_open(struct inode * node, struct file * file)
 {
-    TRACE("");
     // TODO read from SYS CTL
     pcm3060_config_t cfg = {
         .sck_f =CONFIG_ADC_FS_HZ,
@@ -119,7 +118,7 @@ static ssize_t chrdev_pcm3060_read(struct file *file, char __user *buf, size_t c
         }
         else
         {
-            ret = pcm3060_data->pcm3060->input_buffer->copy_to_user(pcm3060_data->pcm3060->input_buffer, buf, count, 0); // todo this must be an output buffer
+            ret = pipe_buffer_copy_to_user(pcm3060_data->pcm3060->input_buffer, buf, count, *offset); // todo this must be an output buffer, offset?
             *offset += ret;
         }
     }
@@ -141,11 +140,11 @@ static ssize_t chrdev_pcm3060_write(struct file *file, const char __user *buf, s
         }
         else if (pcm3060_data->pcm3060->input_buffer == NULL)
         {
-            ERROR("No output buffer!");
+            ERROR("No input buffer!");
         }
-        else if (pcm3060_data->pcm3060->input_buffer->write_from_user(pcm3060_data->pcm3060->input_buffer, buf, count))
+        else if (pipe_buffer_copy_from_user(pcm3060_data->pcm3060->input_buffer, buf, count))
         {
-            ERROR("Writing to input wring buffer failed!");
+            ERROR("Writing to input buffer failed!");
         }
         else
         {

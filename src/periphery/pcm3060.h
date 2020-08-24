@@ -7,7 +7,7 @@
 #define KERNELMODULE_PCM3060_PERIPHERY_PCM3060_H
 
 #include <linux/types.h>
-#include <utils/dualbuffer.h>
+#include <utils/pipe_buffer.h>
 
 typedef struct pcm3060_config
 {
@@ -20,8 +20,9 @@ typedef struct pcm3060
     //write
     //read
     int (*init) (const pcm3060_config_t* const cfg);
-    dualbuffer_t*const input_buffer;
-    dualbuffer_t*const output_buffer;
+    // Todo move to impl, add getters
+    pipe_buffer_t* input_buffer;
+    pipe_buffer_t* output_buffer;
 } pcm3060_t;
 
 //alloacate and setup the struct

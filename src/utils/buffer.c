@@ -32,7 +32,7 @@ static inline  _buffer_impl_t* _get_buffer_impl(const unsigned int size)
     }
     else
     {
-        DEBUG("Allocated new buffer");
+        TRACE("Allocated new byte buffer %p", newbuf->buf);
     }
 
     spin_lock_init(&newbuf->slock);
@@ -50,17 +50,31 @@ static inline  _buffer_impl_t* _get_buffer_impl(const unsigned int size)
         return NULL;
 }
 
+static void _sync_buffer_impl (_buffer_impl_t* bufimpl)
+{
+    //so no new writters can't join.
+    atomic_set(&bufimpl->write_off, bufimpl->bufsize);
+
+    //wait for writers to finish
+    if (atomic_read(&bufimpl->n_active_writters))
+    {
+        spin_lock(&bufimpl->slock);
+    }
+}
+
 static inline void _put_buffer_impl (_buffer_impl_t* bufimpl)
 {
     TRACE("");
-    if (!bufimpl)
+    if (bufimpl == NULL)
     {
         ERROR("Invalid buffer pointer!");
         return;
     }
+    _sync_buffer_impl(bufimpl);
 
-    TRACE("Freeing...");
+    TRACE("Freeing byte buffer %p", bufimpl->buf);
     kfree(bufimpl->buf);
+    TRACE("Freeing buffer implementation %p", bufimpl);
     kfree(bufimpl);
     bufimpl = NULL;
 }
@@ -71,7 +85,7 @@ static inline unsigned int _write_impl (struct buffer* this_buffer, const void* 
     TRACE("");
     if ((buffer_ext == NULL) || (this_buffer == NULL))
     {
-        ERROR("Invalid (ring)buffer");
+        ERROR("Invalid buffer");
         n_bytes_dropped = buflen;
     }
     else if (buflen == 0)
@@ -205,14 +219,16 @@ static unsigned int _copy_to_user (const struct buffer* this_buffer, void* buffe
 static unsigned int _read (const struct buffer* this_buffer, void** out_buffer_p, const unsigned int off)
 {
     unsigned int n_bytes_available = 0;
+    TRACE("");
     if ((this_buffer == NULL))
     {
         ERROR("Invalid buffer");
         return 0;
     }
-    else if (out_buffer_p != NULL)
+    else  if ((out_buffer_p == NULL))
     {
-        WARNING("Overwriting existing buffer pointer %p", out_buffer_p);
+        ERROR("Invalid pointer to external buffer");
+        return 0;
     }
 
     if (off > (n_bytes_available = atomic_read(&this_buffer->_impl_p->n_bytes_written)))
@@ -221,10 +237,12 @@ static unsigned int _read (const struct buffer* this_buffer, void** out_buffer_p
     }
     else
     {
+        TRACE("avaiable bytes %d", n_bytes_available);
         n_bytes_available -= off;
-        out_buffer_p = this_buffer->_impl_p->buf + off;
+        TRACE("avaiable bytes after offset %d", n_bytes_available);
+        *out_buffer_p = this_buffer->_impl_p->buf + off;
+        TRACE("Internal buffer %p, buf out %p", this_buffer->_impl_p->buf, *out_buffer_p);
     }
-    
     
     return n_bytes_available;
 }
@@ -248,14 +266,8 @@ static void _reset (struct buffer* this_buffer)
         ERROR("Invalid buffer");
         return;
     }
-    //so no new writters can't join.
-    atomic_set(&this_buffer->_impl_p->write_off, this_buffer->_impl_p->bufsize);
 
-    //wait for writers to finish
-    if (atomic_read(&this_buffer->_impl_p->n_active_writters))
-    {
-            spin_lock(&this_buffer->_impl_p->slock);
-    }
+    _sync_buffer_impl(this_buffer->_impl_p);
 
     atomic_set(&this_buffer->_impl_p->write_off, 0);
     atomic_set(&this_buffer->_impl_p->n_bytes_written, 0);
@@ -326,7 +338,7 @@ void put_buffer(buffer_t* buf)
         ERROR("Invalid buffer pointer");
         return;
     }
-
+    //TODO MAKE THREAD SAFE SYNC
     _put_buffer_impl(buf->_impl_p);
     kfree(buf);
     buf = NULL;

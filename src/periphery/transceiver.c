@@ -10,43 +10,57 @@
 #include <utils/logging.h>
 #include <linux/sched.h>
 #include <linux/kthread.h>
-#include <linux/mutex.h>
+#include <linux/completion.h>
+
+#include <linux/delay.h> // todo RM
+#include <linux/jiffies.h> // todo RM
 
 static struct task_struct* etx_spi_thread;
+DECLARE_COMPLETION(tx_completion);
 
 static struct _thread_in_data
 {
     struct spi_device* spiDev;
-    dualbuffer_t const* bufin;
-    dualbuffer_t const* bufout;
-} _internal_data;
+    pipe_buffer_t const* bufin;
+    pipe_buffer_t * bufout;
+} _internal_data = {NULL, NULL, NULL};
 
 static int _tx_run(void* unused)
 {
-    static int bla = 0;
+    static int offset = 0;
     TRACE("Starting while %p %p...", _internal_data.spiDev, _internal_data.bufin,_internal_data.bufout);
-    while(!kthread_should_stop() && bla++ < 20)
+
+    while(!kthread_should_stop())
     {
-        unsigned int n_bytes_to_write = 0;
+        unsigned int n_bytes_to_write = 0, offset = 0;
         void* mem = NULL;
-        if ( (n_bytes_to_write = (_internal_data.bufin->read(_internal_data.bufin, mem, 0)) > 0) && (mem != NULL))
+        TRACE("Reading");
+        if ( pipe_buffer_n_bytes_available(_internal_data.bufin) > 0)
         {
+            n_bytes_to_write = pipe_buffer_read_start(_internal_data.bufin, &mem);
             TRACE("Writing %d bytes...", n_bytes_to_write);
             spi_write(_internal_data.spiDev, mem, n_bytes_to_write);
+            TRACE("End reading");
+            pipe_buffer_read_end(_internal_data.bufin);
+            TRACE("FIN Reading");
+
         }
-        _internal_data.bufin->release_read(_internal_data.bufin, mem);
+
          //TODO spi_read (sync) all the time... OR better : async...
 
         // TODO rm
         TRACE("Sleeping, should have written %d bytes", n_bytes_to_write);
-        schedule_timeout(1*HZ);
+        set_current_state(TASK_INTERRUPTIBLE);
+        schedule_timeout(msecs_to_jiffies(1000));
+        // msleep(1000);
+        // schedule();
     }
-
-    spi_dev_put(_internal_data.spiDev);
+    TRACE("Exiting...");
+    complete(&tx_completion);
     return 0;
 }
 
-int tx_init(struct device *pdev, dualbuffer_t const* bufin, dualbuffer_t const* bufout)
+int tx_init(struct device *pdev, pipe_buffer_t const* bufin, pipe_buffer_t* bufout)
 {
     struct spi_device* ext_spi_dev;
 
@@ -88,6 +102,7 @@ int tx_init(struct device *pdev, dualbuffer_t const* bufin, dualbuffer_t const* 
     if(IS_ERR(etx_spi_thread))
     {
         printk(KERN_ERR "Cannot create kthread\n");
+        etx_spi_thread = NULL;
         goto r_device;
     }
 
@@ -101,7 +116,29 @@ r_device:
 
 int tx_cleanup(struct device *pdev)
 {
+    //TODO checks...
     INFO("Cleaning up transceiver....");
-    kthread_stop(etx_spi_thread);
+    if (etx_spi_thread != NULL)
+    {
+        INFO("Stopping thread %p ...", etx_spi_thread);
+        kthread_stop(etx_spi_thread);
+        TRACE("Waiting to join...");
+        wait_for_completion(&tx_completion);
+    }
+    else
+    {
+        WARNING("No kernel thread...");
+    }
+    if (_internal_data.spiDev != NULL)
+    {
+        TRACE("Removing SPI device..");
+        spi_dev_put(_internal_data.spiDev);
+    }
+    else
+    {
+        TRACE("No SPI device..");
+    }
+    
+    
     return 0;
 }

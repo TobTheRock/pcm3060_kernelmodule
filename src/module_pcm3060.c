@@ -17,14 +17,14 @@ static pcm3060_t* pcmdev;
 static int __init _pcm3060_module_init(void)
 {
     INFO("Kernel Module Inserted Successfully...");
-    pcmdev = get_pcm3060();
+    // pcmdev = get_pcm3060();
 	return chrdev_pcm3060_register("pcm3060");
 }
 
 void __exit _pcm3060_module_exit(void)
 {
     INFO("Removing kernel module ");
-    put_pcm3060(pcmdev);
+    // put_pcm3060(pcmdev);
     chrdev_pcm3060_unregister();
 }
 
