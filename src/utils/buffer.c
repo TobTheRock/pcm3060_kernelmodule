@@ -1,5 +1,6 @@
 #include "buffer.h"
 #include <utils/logging.h>
+#include <utils/ptr.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/spinlock.h>
@@ -65,11 +66,7 @@ static void _sync_buffer_impl (_buffer_impl_t* bufimpl)
 static inline void _put_buffer_impl (_buffer_impl_t* bufimpl)
 {
     TRACE("");
-    if (bufimpl == NULL)
-    {
-        ERROR("Invalid buffer pointer!");
-        return;
-    }
+    RETURN_VOID_ON_NULL(bufimpl);
     _sync_buffer_impl(bufimpl);
 
     TRACE("Freeing byte buffer %p", bufimpl->buf);
@@ -153,15 +150,19 @@ static inline unsigned int _write_impl (struct buffer* this_buffer, const void* 
     return n_bytes_dropped;
 }
 
-static unsigned int _write (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
+unsigned int buffer_copy_write (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
 {
     TRACE("");
+    RETURN_ON_NULL(this_buffer, buflen);
+    RETURN_ON_NULL(buffer_ext, buflen);
     return _write_impl(this_buffer, buffer_ext, buflen, 0);
 }
 
-static unsigned int _write_from_user (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
+unsigned int buffer_copy_from_user (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
 {
     TRACE("");
+    RETURN_ON_NULL(this_buffer, buflen);
+    RETURN_ON_NULL(buffer_ext, buflen);
     return _write_impl(this_buffer, buffer_ext, buflen, 1);
 }
 
@@ -169,13 +170,10 @@ static inline unsigned int  _copy_impl (const struct buffer* this_buffer, void* 
 {
     unsigned int n_bytes_dropped = 0, n_bytes_available, n_bytes_to_copy;
     TRACE("");
-
-    if ((this_buffer == NULL) || (buffer_ext == NULL))
-    {
-        ERROR("Invalid (external) buffer");
-        n_bytes_dropped = buflen;
-    }
-    else if (buflen == 0)
+    
+    RETURN_ON_NULL(this_buffer, buflen);
+    RETURN_ON_NULL(buffer_ext, buflen);
+    if (buflen == 0)
     {
         DEBUG("Buflen is 0, nothing todo");
     }
@@ -205,31 +203,23 @@ static inline unsigned int  _copy_impl (const struct buffer* this_buffer, void* 
     return n_bytes_dropped;
 }
 
-static unsigned int _copy (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+unsigned int buffer_read_copy (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
 {
     TRACE("");
     return _copy_impl(this_buffer, buffer_ext, buflen, off, 0);
 }
-static unsigned int _copy_to_user (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
+unsigned int buffer_copy_to_user (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
 {
     TRACE("");
     return _copy_impl(this_buffer, buffer_ext, buflen, off, 1);
 }
 
-static unsigned int _read (const struct buffer* this_buffer, void** out_buffer_p, const unsigned int off)
+unsigned int buffer_read (const struct buffer* this_buffer, void** out_buffer_p, const unsigned int off)
 {
     unsigned int n_bytes_available = 0;
     TRACE("");
-    if ((this_buffer == NULL))
-    {
-        ERROR("Invalid buffer");
-        return 0;
-    }
-    else  if ((out_buffer_p == NULL))
-    {
-        ERROR("Invalid pointer to external buffer");
-        return 0;
-    }
+    RETURN_ON_NULL(this_buffer, 0);
+    RETURN_ON_NULL(out_buffer_p, 0);
 
     if (off > (n_bytes_available = atomic_read(&this_buffer->_impl_p->n_bytes_written)))
     {
@@ -247,25 +237,16 @@ static unsigned int _read (const struct buffer* this_buffer, void** out_buffer_p
     return n_bytes_available;
 }
 
-static unsigned int _get_n_bytes_readable (const struct buffer* this_buffer)
+unsigned int buffer_get_n_bytes_readable (const struct buffer* this_buffer)
 {
-    if ((this_buffer == NULL))
-    {
-        ERROR("Invalid buffer");
-        return 0;
-    }
+    RETURN_ON_NULL(this_buffer, 0);
     return atomic_read(&this_buffer->_impl_p->n_bytes_written);
 }
 
-static void _reset (struct buffer* this_buffer)
+void buffer_reset (struct buffer* this_buffer)
 {
     TRACE("");
-
-    if (this_buffer == NULL)
-    {
-        ERROR("Invalid buffer");
-        return;
-    }
+    RETURN_VOID_ON_NULL(this_buffer);
 
     _sync_buffer_impl(this_buffer->_impl_p);
 
@@ -276,14 +257,10 @@ static void _reset (struct buffer* this_buffer)
     return;
 }
 
-static void _sync (struct buffer* this_buffer)
+void buffer_sync (struct buffer* this_buffer)
 {
     TRACE("");
-    if (this_buffer == NULL)
-    {
-        ERROR("Invalid buffer");
-        return;
-    }
+    RETURN_VOID_ON_NULL(this_buffer);
 
     //wait for writers to finish
     if (atomic_read(&this_buffer->_impl_p->n_active_writters))
@@ -303,23 +280,15 @@ buffer_t* get_buffer(const unsigned int size)
         ERROR("Could not allocate kernel memory.");
         goto r_null;
     }
-    else if ((*(_buffer_impl_t**)&newbuf->_impl_p = _get_buffer_impl(size)) == NULL)
+    else if ((CONST_CAST(_buffer_impl_t*)newbuf->_impl_p = _get_buffer_impl(size)) == NULL)
     {
         goto r_buf;
     }
     else
     {
         DEBUG("Allocated new buffer");
+        CONST_CAST(unsigned int) newbuf->size = size;
     }
-
-    newbuf->write = &_write;
-    newbuf->copy = &_copy;
-    newbuf->write_from_user = &_write_from_user;
-    newbuf->copy_to_user = &_copy_to_user;
-    newbuf->reset = &_reset;
-    newbuf->sync = &_sync;
-    newbuf->read = &_read;
-    newbuf->get_n_bytes_readable = &_get_n_bytes_readable;
 
     return newbuf;
 
@@ -333,11 +302,7 @@ buffer_t* get_buffer(const unsigned int size)
 void put_buffer(buffer_t* buf)
 {
     TRACE("");
-    if (buf == NULL)
-    {
-        ERROR("Invalid buffer pointer");
-        return;
-    }
+    RETURN_VOID_ON_NULL(buf);
     //TODO MAKE THREAD SAFE SYNC
     _put_buffer_impl(buf->_impl_p);
     kfree(buf);

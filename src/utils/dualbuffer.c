@@ -71,7 +71,7 @@ static unsigned int _write (struct dualbuffer* this_buffer, const void* buffer_e
         ERROR("Invalid buffer pointer");
         return buflen;
     }
-    return this_buffer->_impl_p->write_buf->write(this_buffer->_impl_p->write_buf, buffer_ext, buflen);
+    return buffer_write_copy(this_buffer->_impl_p->write_buf, buffer_ext, buflen);
 }
 
 static unsigned int _write_from_user (struct dualbuffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
@@ -82,22 +82,22 @@ static unsigned int _write_from_user (struct dualbuffer* this_buffer, const void
         ERROR("Invalid buffer pointer");
         return buflen;
     }
-    return this_buffer->_impl_p->write_buf->write_from_user(this_buffer->_impl_p->write_buf, buffer_ext, buflen);
+    return buffer_copy_from_user(this_buffer->_impl_p->write_buf, buffer_ext, buflen);
 }
 
 static void _switch_buf_start (const struct dualbuffer* this_buffer)
 {
-    if ( (atomic_inc_return(&this_buffer->_impl_p->n_active_readers) == 1) &&  //first registered reader
-         (this_buffer->_impl_p->write_buf->get_n_bytes_readable(this_buffer->_impl_p->write_buf)) > 0 ) // Only switch if bytes have been written
+    if ( (atomic_inc_return(&this_buffer->_impl_p->n_active_readers) == 1)) //first registered reader
+         //(this_buffer->_impl_p->write_buf->get_n_bytes_readable(this_buffer->_impl_p->write_buf)) > 0 ) // Only switch if bytes have been written
     {
         //swap write and read buffers
         buffer_t* tmp = this_buffer->_impl_p->write_buf;
         DEBUG("Swapping buffers");
         TRACE("Write buffer addr: %p, Read buffer addr: %p", this_buffer->_impl_p->write_buf, this_buffer->_impl_p->read_buf);
-        this_buffer->_impl_p->read_buf->reset(this_buffer->_impl_p->read_buf);
+        buffer_reset(this_buffer->_impl_p->read_buf);
         this_buffer->_impl_p->write_buf = this_buffer->_impl_p->read_buf;
         this_buffer->_impl_p->read_buf = tmp;
-        this_buffer->_impl_p->read_buf->sync(this_buffer->_impl_p->read_buf); //wait for possible writers to finish before continuing
+        buffer_sync(this_buffer->_impl_p->read_buf); //wait for possible writers to finish before continuing
         TRACE("Write buffer addr: %p, Read buffer addr: %p", this_buffer->_impl_p->write_buf, this_buffer->_impl_p->read_buf);
     }
     return;
@@ -119,7 +119,7 @@ static unsigned int _copy (const struct dualbuffer* this_buffer, void* buffer_ex
         return buflen;
     }
     _switch_buf_start(this_buffer);
-    n_bytes_dropped = this_buffer->_impl_p->read_buf->copy(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
+    n_bytes_dropped = buffer_read_copy(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
     _switch_buf_end(this_buffer);
     return n_bytes_dropped;
 }
@@ -133,7 +133,7 @@ static unsigned int _copy_to_user (const struct dualbuffer* this_buffer, void* b
         return buflen;
     }
     _switch_buf_start(this_buffer);
-    n_bytes_dropped = this_buffer->_impl_p->read_buf->copy_to_user(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
+    n_bytes_dropped = buffer_copy_to_user(this_buffer->_impl_p->read_buf, buffer_ext, buflen, off);
     _switch_buf_end(this_buffer);
     return n_bytes_dropped;
 }
@@ -148,7 +148,7 @@ static unsigned int _read (const struct dualbuffer* this_buffer, void** out_buff
         return 0;
     }
     _switch_buf_start(this_buffer);
-    return this_buffer->_impl_p->read_buf->read(this_buffer->_impl_p->read_buf, out_buffer_p, off);
+    return buffer_read(this_buffer->_impl_p->read_buf, out_buffer_p, off);
 }
 
 static void _release_read (const struct dualbuffer* this_buffer, void** buffer_ext)
@@ -173,7 +173,7 @@ static unsigned int _get_n_bytes_readable (const struct dualbuffer* this_buffer)
         ERROR("Invalid buffer pointer");
         return 0;
     }
-    return this_buffer->_impl_p->read_buf->get_n_bytes_readable(this_buffer->_impl_p->read_buf);
+    return buffer_get_n_bytes_readable(this_buffer->_impl_p->read_buf);
 }
 
 static void _reset (struct dualbuffer* this_buffer)
@@ -184,8 +184,8 @@ static void _reset (struct dualbuffer* this_buffer)
         return;
     }
 
-    this_buffer->_impl_p->read_buf->reset(this_buffer->_impl_p->read_buf);
-    this_buffer->_impl_p->write_buf->reset(this_buffer->_impl_p->write_buf);
+    buffer_reset(this_buffer->_impl_p->read_buf);
+    buffer_reset(this_buffer->_impl_p->write_buf);
 }
 
 dualbuffer_t* get_dualbuffer(const unsigned int size)

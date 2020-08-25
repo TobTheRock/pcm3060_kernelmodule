@@ -10,7 +10,7 @@
 
 #define  WAIT_FOR_DATA_WRITE(ptr_bufimpl)\
 {\
-    if (!ptr_bufimpl->buf->get_n_bytes_readable(ptr_bufimpl->buf))\
+    if (!buffer_get_n_bytes_readable(ptr_bufimpl->buf))\
     {\
         DEBUG("Waiting for data...");\
         wait_for_completion_killable(&ptr_bufimpl->write_completion);\
@@ -142,7 +142,7 @@ unsigned int pipe_buffer_copy_from_user(struct pipe_buffer* pipe_buffer, const v
     TRACE("");
     RETURN_ON_NULL(pipe_buffer, buflen);
     WAIT_FOR_READ_COMPLETE(pipe_buffer->_impl_p);
-    n_bytes_dropped = pipe_buffer->_impl_p->buf->write_from_user(pipe_buffer->_impl_p->buf, buffer_ext, buflen);
+    n_bytes_dropped = buffer_copy_from_user(pipe_buffer->_impl_p->buf, buffer_ext, buflen);
     notify_data_write(pipe_buffer->_impl_p, buflen);
     return n_bytes_dropped;
 }
@@ -150,14 +150,14 @@ unsigned int pipe_buffer_copy_from_user(struct pipe_buffer* pipe_buffer, const v
 unsigned int pipe_buffer_copy_to_user(struct pipe_buffer* pipe_buffer, const void* buffer_ext, const unsigned int buflen, const unsigned int off)
 {
     RETURN_ON_NULL(pipe_buffer, buflen);
-    return pipe_buffer->_impl_p->buf->copy_to_user(pipe_buffer->_impl_p->buf, buffer_ext, buflen, off);
+    return buffer_copy_to_user(pipe_buffer->_impl_p->buf, buffer_ext, buflen, off);
 }
 
 unsigned int pipe_buffer_n_bytes_available(struct pipe_buffer* pipe_buffer)
 {
     TRACE("");
     RETURN_ON_NULL(pipe_buffer, 0);
-    return pipe_buffer->_impl_p->buf->get_n_bytes_readable(pipe_buffer->_impl_p->buf);
+    return buffer_get_n_bytes_readable(pipe_buffer->_impl_p->buf);
 }
 
 unsigned int pipe_buffer_read_start(const pipe_buffer_t* pipe_buffer, void** o_buffer_ptr)
@@ -169,7 +169,7 @@ unsigned int pipe_buffer_read_start(const pipe_buffer_t* pipe_buffer, void** o_b
         TRACE("Locking");
         reinit_completion(&pipe_buffer->_impl_p->read_completion);
     }
-    return pipe_buffer->_impl_p->buf->read(pipe_buffer->_impl_p->buf, o_buffer_ptr, 0);
+    return buffer_read(pipe_buffer->_impl_p->buf, o_buffer_ptr, 0);
 }
 
 unsigned int pipe_buffer_read_start_waiting(const pipe_buffer_t* pipe_buffer, void** o_buffer_ptr)
@@ -187,7 +187,7 @@ void pipe_buffer_read_end(const pipe_buffer_t* pipe_buffer)
     if (atomic_dec_and_test(&pipe_buffer->_impl_p->n_active_readers))
     {
         TRACE("Resetting buffer");
-        pipe_buffer->_impl_p->buf->reset(pipe_buffer->_impl_p->buf);
+        buffer_reset(pipe_buffer->_impl_p->buf);
         TRACE("Unlocking");
         complete_all(&pipe_buffer->_impl_p->read_completion);
     }
