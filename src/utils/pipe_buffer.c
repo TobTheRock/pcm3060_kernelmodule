@@ -147,13 +147,13 @@ unsigned int pipe_buffer_copy_from_user(struct pipe_buffer* pipe_buffer, const v
     return n_bytes_dropped;
 }
 
-unsigned int pipe_buffer_copy_to_user(struct pipe_buffer* pipe_buffer, const void* buffer_ext, const unsigned int buflen, const unsigned int off)
+unsigned int pipe_buffer_copy_to_user(const struct pipe_buffer* pipe_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off)
 {
     RETURN_ON_NULL(pipe_buffer, buflen);
     return buffer_copy_to_user(pipe_buffer->_impl_p->buf, buffer_ext, buflen, off);
 }
 
-unsigned int pipe_buffer_n_bytes_available(struct pipe_buffer* pipe_buffer)
+unsigned int pipe_buffer_n_bytes_available(const struct pipe_buffer* pipe_buffer)
 {
     TRACE("");
     RETURN_ON_NULL(pipe_buffer, 0);

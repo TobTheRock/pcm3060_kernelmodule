@@ -19,11 +19,11 @@ pipe_buffer_t* get_pipe_buffer(const unsigned int size);
 void put_pipe_buffer(pipe_buffer_t* buf);
 
 unsigned int pipe_buffer_copy_from_user(struct pipe_buffer* pipe_buffer, const void* buffer_ext, const unsigned int buflen);
-unsigned int pipe_buffer_copy_to_user(struct pipe_buffer* pipe_buffer, const void* buffer_ext, const unsigned int buflen, const unsigned int off);
+unsigned int pipe_buffer_copy_to_user(const struct pipe_buffer* pipe_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
 
 // READER
 
-unsigned int pipe_buffer_n_bytes_available(pipe_buffer_t* pipe_buffer);
+unsigned int pipe_buffer_n_bytes_available(const pipe_buffer_t* pipe_buffer);
 // start reading the next available bytes, return NOF bytes readable, sets pointer to memory region
 unsigned int pipe_buffer_read_start(const pipe_buffer_t* pipe_buffer, void** o_buffer_ptr);
 //waits for data:
