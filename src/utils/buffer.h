@@ -27,6 +27,12 @@ unsigned int buffer_copy_to_user (const struct buffer* this_buffer, void* buffer
 //direct read, returns NOF bytes readible,
 unsigned int buffer_read (const struct buffer* this_buffer, void** out_buffer_p, const unsigned int off);
 
+//reserve direct write, returns NOF bytes writable, blocks other writes until buffer_write_finish was called
+unsigned int buffer_write_reserve (struct buffer* this_buffer, void** out_buffer_p, const unsigned int n_bytes_requested);
+//only call this if buffer_write_reserve returned sth > 0
+void buffer_write_finish (struct buffer* this_buffer);
+
+
 //get nof readable bytes
 unsigned int buffer_get_n_bytes_readable (const struct buffer* this_buffer);
 

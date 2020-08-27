@@ -16,6 +16,10 @@ typedef struct _buffer_impl
     struct spinlock slock;
 } _buffer_impl_t;
 
+typedef struct _wr_offset_range
+{
+    unsigned int wr_off_start, n_bytes_writable, n_bytes_dropped;
+} _wr_offset_range_t;
 
 static inline  _buffer_impl_t* _get_buffer_impl(const unsigned int size)
 {
@@ -76,94 +80,114 @@ static inline void _put_buffer_impl (_buffer_impl_t* bufimpl)
     bufimpl = NULL;
 }
 
-static inline unsigned int _write_impl (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen, const bool fromUser)
+static int _write_check_full(struct buffer* this_buffer)
 {
-    unsigned int n_bytes_dropped = 0, this_bufsize;
-    TRACE("");
-    if ((buffer_ext == NULL) || (this_buffer == NULL))
+    int ret = 0;
+    if (atomic_read(&this_buffer->_impl_p->write_off) >= this_buffer->_impl_p->bufsize)
     {
-        ERROR("Invalid buffer");
-        n_bytes_dropped = buflen;
+        ERROR("Buffer is already full!");
+        ret = -1;
     }
-    else if (buflen == 0)
+    return ret;
+}
+
+static _wr_offset_range_t _write_request_off_range_sync(struct buffer* this_buffer, unsigned int buflen)
+{
+    _wr_offset_range_t range_ret = {0,0,0};
+    //Starting synchronized write block
+    //increase offset first to dissallow other reads getting the memory range
+    unsigned int wr_off_end = atomic_add_return(buflen, &this_buffer->_impl_p->write_off);
+    range_ret.wr_off_start = wr_off_end - buflen;
+    //in case offset is greater than the buffersize not all bytes can be copied!
+    if (range_ret.wr_off_start >= this_buffer->_impl_p->bufsize)
+    {
+        ERROR("Buffer is already full!");
+        range_ret.n_bytes_writable = 0;
+        range_ret.n_bytes_dropped = buflen;
+    }
+    else
+    {
+        range_ret.n_bytes_dropped = (this_buffer->_impl_p->bufsize <= wr_off_end) ? min( (wr_off_end - this_buffer->_impl_p->bufsize+1), buflen) : 0;
+        range_ret.n_bytes_writable = buflen - range_ret.n_bytes_dropped;
+
+        atomic_add(range_ret.n_bytes_writable, &this_buffer->_impl_p->n_bytes_written_tmp);
+    }
+    
+    return range_ret;
+}
+
+static void _write_finish_sync(struct buffer* this_buffer)
+{
+    //Ending synchronized write block
+    if (atomic_dec_and_test(&this_buffer->_impl_p->n_active_writters))
+    {
+        TRACE("Unlocking");
+        spin_unlock(&this_buffer->_impl_p->slock);
+        TRACE("Increasing n_bytes_written %d", atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp));
+        atomic_add(atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp), &this_buffer->_impl_p->n_bytes_written);
+        atomic_set(&this_buffer->_impl_p->n_bytes_written_tmp, 0);
+    }
+    else
+    {
+        TRACE("Waiting for other threads...");
+        spin_lock(&this_buffer->_impl_p->slock);
+    }
+}
+
+unsigned int buffer_copy_write (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
+{
+    unsigned int n_bytes_dropped = 0;
+    TRACE("");
+    RETURN_ON_NULL(this_buffer, buflen);
+    RETURN_ON_NULL(buffer_ext, buflen);
+    if (buflen == 0)
     {
         DEBUG("Buflen is 0, nothing todo");
     }
-    else if (atomic_read(&this_buffer->_impl_p->write_off) >= (this_bufsize = this_buffer->_impl_p->bufsize))
+    else if (_write_check_full(this_buffer))
     {
-        ERROR("Buffer is already full!");
-        n_bytes_dropped = buflen;
+        n_bytes_dropped =  buflen;
     }
-    // else if (buflen > this_buffer->_impl_p->bufsize)
-    // {
-    //     ERROR("Ringbuffer with size %d is to small for write with %d bytes", ringbufsize, buflen);
-    //     return buflen;
-    // }
     else
     {
-        unsigned int write_off_new, write_off_old, n_bytes_to_write = 0;
-        //first thread
-        if (atomic_inc_return(&this_buffer->_impl_p->n_active_writters) == 1)
+        _wr_offset_range_t range = _write_request_off_range_sync(this_buffer, buflen);
+        n_bytes_dropped = range.n_bytes_dropped;
+        if (range.n_bytes_writable > 0 )
         {
-            TRACE("Locking");
-            spin_lock(&this_buffer->_impl_p->slock);
+            memcpy( this_buffer->_impl_p->buf + range.wr_off_start, buffer_ext, range.n_bytes_writable);
         }
-        // Synchronized block
-        //increase offset first to dissallow other reads getting the memory range
-        write_off_new = atomic_add_return(buflen, &this_buffer->_impl_p->write_off);
-        write_off_old = write_off_new - buflen;
-        //in case offset is greater than the buffersize not all bytes can be copied!
-        if (write_off_old >= this_bufsize)
-        {
-            ERROR("Buffer is already full!");
-            n_bytes_dropped = buflen;
-        }
-        else
-        {
-            n_bytes_dropped = (this_bufsize <= write_off_new) ? min( (write_off_new - this_bufsize+1), buflen) : 0;
-            n_bytes_to_write = buflen - n_bytes_dropped;
-            if (fromUser)
-            {
-                n_bytes_dropped += copy_from_user(this_buffer->_impl_p->buf + write_off_old, buffer_ext, n_bytes_to_write);
-            }
-            else
-            {
-                memcpy( this_buffer->_impl_p->buf + write_off_old, buffer_ext, n_bytes_to_write);
-            }
-        }
-        atomic_add(n_bytes_to_write, &this_buffer->_impl_p->n_bytes_written_tmp);
-        if (atomic_dec_and_test(&this_buffer->_impl_p->n_active_writters))
-        {
-            TRACE("Unlocking");
-            spin_unlock(&this_buffer->_impl_p->slock);
-            TRACE("Increasing n_bytes_written %d", atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp));
-            atomic_add(atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp), &this_buffer->_impl_p->n_bytes_written);
-        }
-        else
-        {
-            TRACE("Waiting for other threads...");
-            spin_lock(&this_buffer->_impl_p->slock);
-        }
-        atomic_set(&this_buffer->_impl_p->n_bytes_written_tmp, 0);
+        _write_finish_sync(this_buffer);
     }
 
     return n_bytes_dropped;
 }
 
-unsigned int buffer_copy_write (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
-{
-    TRACE("");
-    RETURN_ON_NULL(this_buffer, buflen);
-    RETURN_ON_NULL(buffer_ext, buflen);
-    return _write_impl(this_buffer, buffer_ext, buflen, 0);
-}
-
 unsigned int buffer_copy_from_user (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
 {
+    unsigned int n_bytes_dropped = 0;
     TRACE("");
     RETURN_ON_NULL(this_buffer, buflen);
     RETURN_ON_NULL(buffer_ext, buflen);
-    return _write_impl(this_buffer, buffer_ext, buflen, 1);
+    if (buflen == 0)
+    {
+        DEBUG("Buflen is 0, nothing todo");
+    }
+    else if (_write_check_full(this_buffer))
+    {
+        n_bytes_dropped =  buflen;
+    }
+    else
+    {
+        _wr_offset_range_t range = _write_request_off_range_sync(this_buffer, buflen);
+        n_bytes_dropped = range.n_bytes_dropped;
+        if (range.n_bytes_writable > 0 )
+        {
+            n_bytes_dropped += copy_from_user(this_buffer->_impl_p->buf + range.wr_off_start, buffer_ext, range.n_bytes_writable);
+        }
+        _write_finish_sync(this_buffer);
+    }
+
+    return n_bytes_dropped;
 }
 
 static inline unsigned int  _copy_impl (const struct buffer* this_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off, bool fromUser)
@@ -236,6 +260,49 @@ unsigned int buffer_read (const struct buffer* this_buffer, void** out_buffer_p,
     
     return n_bytes_available;
 }
+
+unsigned int buffer_write_reserve (struct buffer* this_buffer, void** out_buffer_p, const unsigned int n_bytes_requested)
+{
+    unsigned int n_bytes_to_write = 0;
+    TRACE("");
+    RETURN_ON_NULL(this_buffer, 0);
+    if (n_bytes_requested == 0)
+    {
+        DEBUG("n_bytes_requested is 0, nothing todo");
+    }
+    else if (_write_check_full(this_buffer))
+    {
+        WARNING("Buffer is already full");
+    }
+    else
+    {
+        _wr_offset_range_t range = _write_request_off_range_sync(this_buffer, n_bytes_requested);
+        if(range.n_bytes_writable)
+        {
+            *out_buffer_p = this_buffer->_impl_p->buf + range.wr_off_start;
+        }
+        n_bytes_to_write = range.n_bytes_writable;
+    }
+    
+    return n_bytes_to_write;
+}
+
+void buffer_write_finish (struct buffer* this_buffer)
+{
+    TRACE("");
+    RETURN_VOID_ON_NULL(this_buffer);
+
+    if (atomic_read(&this_buffer->_impl_p->n_active_writters) < 1)
+    {
+        ERROR("No writters, did you call buffer_write_reserve?");
+    }
+    else
+    {
+        _write_finish_sync(this_buffer);
+    }
+}
+
+
 
 unsigned int buffer_get_n_bytes_readable (const struct buffer* this_buffer)
 {
