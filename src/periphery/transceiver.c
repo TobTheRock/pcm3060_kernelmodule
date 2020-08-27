@@ -18,6 +18,7 @@
 static struct task_struct* etx_spi_thread;
 DECLARE_COMPLETION(tx_completion);
 
+//TODO keep this static ?
 static struct _thread_in_data
 {
     struct spi_device* spiDev;
@@ -27,33 +28,61 @@ static struct _thread_in_data
 
 static int _tx_run(void* unused)
 {
-    static int offset = 0;
+    // unsigned int n_bytes_writtable = 0;
+    static const unsigned int n_bytes_per_read = 2;  //TODO  from config or so
     TRACE("Starting while %p %p...", _internal_data.spiDev, _internal_data.bufin,_internal_data.bufout);
 
     while(!kthread_should_stop())
     {
-        unsigned int n_bytes_to_write = 0, offset = 0;
-        void* mem = NULL;
+        unsigned int n_bytes_to_write = 0, n_bytes_to_read = 0;
+        void *mem_tx = NULL, *mem_rx = NULL;
         TRACE("Reading");
         if ( pipe_buffer_n_bytes_available(_internal_data.bufin) > 0)
         {
-            n_bytes_to_write = pipe_buffer_read_start(_internal_data.bufin, &mem);
-            TRACE("Writing %d bytes...", n_bytes_to_write);
-            spi_write(_internal_data.spiDev, mem, n_bytes_to_write);
-            TRACE("End reading");
-            pipe_buffer_read_end(_internal_data.bufin);
-            TRACE("FIN Reading");
+            TRACE("Requesting read from pipe");
+            n_bytes_to_write = pipe_buffer_read_start(_internal_data.bufin, &mem_tx);
 
         }
+        
+        if ((n_bytes_to_read = pipe_buffer_write_start(_internal_data.bufout, &mem_rx, n_bytes_per_read)) > 0)
+        {
+            TRACE("Requesting write...");
+        }
+        else
+        {
+            WARNING("RX buffer is full, data might be lost!");
+        }
 
-         //TODO spi_read (sync) all the time... OR better : async...
-
-        // TODO rm
-        TRACE("Sleeping, should have written %d bytes", n_bytes_to_write);
-        set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(msecs_to_jiffies(1000));
-        // msleep(1000);
-        // schedule();
+        if ((mem_rx != NULL) && (mem_tx != NULL))
+        {
+            TRACE("Reading %d and writting %d bytes...", n_bytes_to_read, n_bytes_to_write);
+            spi_write_then_read(_internal_data.spiDev, mem_tx, n_bytes_to_write, mem_rx, n_bytes_to_read);
+            pipe_buffer_read_end(_internal_data.bufin);
+            TRACE("FIN Reading from pipe");
+            pipe_buffer_write_end(_internal_data.bufout);
+            TRACE("FIN writting from pipe");
+        }
+        else if (mem_rx != NULL)
+        {
+            TRACE("Reading %d bytes...", n_bytes_to_read);
+            spi_read(_internal_data.spiDev, mem_rx, n_bytes_to_read);
+            pipe_buffer_write_end(_internal_data.bufout);
+            TRACE("FIN Reading from pipe");
+            
+        }
+        else if (mem_tx != NULL)
+        {
+            TRACE("Writting %d bytes...", n_bytes_to_write);
+            spi_write(_internal_data.spiDev, mem_tx, n_bytes_to_write);
+            pipe_buffer_read_end(_internal_data.bufin);
+            TRACE("FIN Reading from pipe");
+        }
+        else
+        {
+            WARNING("Cannot do anything sleeping!");
+            set_current_state(TASK_INTERRUPTIBLE);
+            schedule_timeout(msecs_to_jiffies(1000)); // Todo rm magic number
+        }
     }
     TRACE("Exiting...");
     complete(&tx_completion);
