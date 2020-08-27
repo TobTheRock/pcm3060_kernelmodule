@@ -33,7 +33,7 @@ void pipe_buffer_read_end(const pipe_buffer_t* pipe_buffer);
 
 //WRITER
 //
-unsigned int pipe_buffer_write_start(pipe_buffer_t* pipe_buffer, void** o_buffer_ptr);
+unsigned int pipe_buffer_write_start(pipe_buffer_t* pipe_buffer, void** o_buffer_ptr, const unsigned int n_bytes_requested);
 //terminate writing
 void pipe_buffer_write_end(pipe_buffer_t* pipe_buffer);
 

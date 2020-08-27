@@ -193,15 +193,17 @@ void pipe_buffer_read_end(const pipe_buffer_t* pipe_buffer)
     }
 }
 
-unsigned int pipe_buffer_write_start(pipe_buffer_t* pipe_buffer, void** o_buffer_ptr)
+unsigned int pipe_buffer_write_start(pipe_buffer_t* pipe_buffer, void** o_buffer_ptr, const unsigned int n_bytes_requested)
 {
-    //TODO
-    return 0;
+    TRACE("");
+    RETURN_ON_NULL(pipe_buffer, 0);
+    return buffer_write_reserve(pipe_buffer->_impl_p->buf, o_buffer_ptr, n_bytes_requested);
 }
 
 
 void pipe_buffer_write_end(pipe_buffer_t* pipe_buffer)
 {
-    //TODO
-    return;
+    TRACE("");
+    RETURN_VOID_ON_NULL(pipe_buffer);
+    buffer_write_finish(pipe_buffer->_impl_p->buf);
 }
