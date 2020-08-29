@@ -3,7 +3,7 @@
 #include <utils/ptr.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
-#include <linux/spinlock.h>
+#include <linux/mutex.h>
 #include <linux/types.h>
 #include <linux/err.h>
 
@@ -13,7 +13,7 @@ typedef struct _buffer_impl
     void* buf;
     const unsigned int bufsize;
     atomic_t write_off, n_bytes_written, n_bytes_written_tmp, n_active_writters;
-    struct spinlock slock;
+    struct mutex mlock;
 } _buffer_impl_t;
 
 typedef struct _wr_offset_range
@@ -40,7 +40,7 @@ static inline  _buffer_impl_t* _get_buffer_impl(const unsigned int size)
         TRACE("Allocated new byte buffer %p", newbuf->buf);
     }
 
-    spin_lock_init(&newbuf->slock);
+    mutex_init(&newbuf->mlock);
     *(unsigned int*)&newbuf->bufsize = size;
     atomic_set(&newbuf->write_off, 0);
     atomic_set(&newbuf->n_active_writters, 0);
@@ -63,7 +63,7 @@ static void _sync_buffer_impl (_buffer_impl_t* bufimpl)
     //wait for writers to finish
     if (atomic_read(&bufimpl->n_active_writters))
     {
-        spin_lock(&bufimpl->slock);
+        mutex_lock(&bufimpl->mlock);
     }
 }
 
@@ -94,9 +94,15 @@ static int _write_check_full(struct buffer* this_buffer)
 static _wr_offset_range_t _write_request_off_range_sync(struct buffer* this_buffer, unsigned int buflen)
 {
     _wr_offset_range_t range_ret = {0,0,0};
+    unsigned int wr_off_end;
     //Starting synchronized write block
+    if (atomic_inc_return(&this_buffer->_impl_p->n_active_writters) == 1) //first thread
+    {
+        TRACE("Locking");
+        mutex_lock(&this_buffer->_impl_p->mlock);
+    }
     //increase offset first to dissallow other reads getting the memory range
-    unsigned int wr_off_end = atomic_add_return(buflen, &this_buffer->_impl_p->write_off);
+    wr_off_end = atomic_add_return(buflen, &this_buffer->_impl_p->write_off);
     range_ret.wr_off_start = wr_off_end - buflen;
     //in case offset is greater than the buffersize not all bytes can be copied!
     if (range_ret.wr_off_start >= this_buffer->_impl_p->bufsize)
@@ -109,7 +115,8 @@ static _wr_offset_range_t _write_request_off_range_sync(struct buffer* this_buff
     {
         range_ret.n_bytes_dropped = (this_buffer->_impl_p->bufsize <= wr_off_end) ? min( (wr_off_end - this_buffer->_impl_p->bufsize+1), buflen) : 0;
         range_ret.n_bytes_writable = buflen - range_ret.n_bytes_dropped;
-
+        
+        // will be added to n_bytes_written on _write_finish_sync
         atomic_add(range_ret.n_bytes_writable, &this_buffer->_impl_p->n_bytes_written_tmp);
     }
     
@@ -122,7 +129,7 @@ static void _write_finish_sync(struct buffer* this_buffer)
     if (atomic_dec_and_test(&this_buffer->_impl_p->n_active_writters))
     {
         TRACE("Unlocking");
-        spin_unlock(&this_buffer->_impl_p->slock);
+        mutex_unlock(&this_buffer->_impl_p->mlock);
         TRACE("Increasing n_bytes_written %d", atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp));
         atomic_add(atomic_read(&this_buffer->_impl_p->n_bytes_written_tmp), &this_buffer->_impl_p->n_bytes_written);
         atomic_set(&this_buffer->_impl_p->n_bytes_written_tmp, 0);
@@ -130,11 +137,11 @@ static void _write_finish_sync(struct buffer* this_buffer)
     else
     {
         TRACE("Waiting for other threads...");
-        spin_lock(&this_buffer->_impl_p->slock);
+        mutex_lock(&this_buffer->_impl_p->mlock);
     }
 }
 
-unsigned int buffer_copy_write (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
+unsigned int buffer_write_copy (struct buffer* this_buffer, const void* buffer_ext, const unsigned int buflen)
 {
     unsigned int n_bytes_dropped = 0;
     TRACE("");
@@ -203,7 +210,7 @@ static inline unsigned int  _copy_impl (const struct buffer* this_buffer, void* 
     }
     else if (off >= (n_bytes_available = atomic_read(&this_buffer->_impl_p->n_bytes_written)))
     {
-        ERROR("Offset %d exceeds nof buffered values %d", off, n_bytes_available);
+        WARN("Offset %d exceeds nof buffered values %d", off, n_bytes_available);
         n_bytes_dropped = buflen;
     }
     else if ( (n_bytes_to_copy = min(n_bytes_available - off, buflen) ) > 0 )
@@ -333,7 +340,7 @@ void buffer_sync (struct buffer* this_buffer)
     if (atomic_read(&this_buffer->_impl_p->n_active_writters))
     {
         TRACE("Waiting...");
-        spin_lock(&this_buffer->_impl_p->slock);
+        mutex_lock(&this_buffer->_impl_p->mlock);
     }
 }
 
