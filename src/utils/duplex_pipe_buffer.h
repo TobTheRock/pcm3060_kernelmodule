@@ -6,14 +6,14 @@
 #ifndef KERNELMODULE_PCM3060_DUPLEX_PIPE_BUFFER_H
 #define KERNELMODULE_PCM3060_DUPLEX_PIPE_BUFFER_H
 
-struct _duplex_duplex_pipe_buffer_impl;
+struct _duplex_pipe_buffer_impl;
 typedef struct duplex_pipe_end duplex_pipe_end_t;
 
 typedef struct duplex_pipe_buffer
 {
     const unsigned int size;
     struct duplex_pipe_end* left_end,* right_end;
-    struct _duplex_duplex_pipe_buffer_impl*const _impl_p;
+    struct _duplex_pipe_buffer_impl*const _impl_p;
 } duplex_pipe_buffer_t;
 
 duplex_pipe_buffer_t* get_duplex_pipe_buffer(const unsigned int size);
