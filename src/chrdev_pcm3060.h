@@ -8,8 +8,6 @@
 
 //#define FS_DEVICE_NAME "PCM3060_DEV"
 
-#define CHRDEV_PCM3060_MAX_DEVICES 1
-
 int chrdev_pcm3060_register(const char* dev_name);
 void chrdev_pcm3060_unregister(void);
 

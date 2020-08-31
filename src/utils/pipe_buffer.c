@@ -1,5 +1,4 @@
 #include "pipe_buffer.h"
-#include "pipe_buffer.h"
 #include <utils/logging.h>
 #include <utils/buffer.h>
 #include <utils/ptr.h>

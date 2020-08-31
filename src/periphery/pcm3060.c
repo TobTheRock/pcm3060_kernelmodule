@@ -18,11 +18,15 @@ typedef struct
     pcm3060_t* pcm3060_ext;
     struct device* pdev;
     pcm3060_config_t* config;
+    duplex_pipe_buffer_t* left_chan_buffer;
+    duplex_pipe_buffer_t* right_chan_buffer;
     atomic_t refcount;
 } _pcm3060_internal_t;
 
 static _pcm3060_internal_t _pcm3060_i =
 {
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL,
@@ -38,7 +42,7 @@ static int _probe_pcm3060_device(struct device *pdev)
     //     ERROR("Failed to initialize CLOCK!");
     // }
     // else
-    if ( (ret = tx_init(pdev, _pcm3060_i.pcm3060_ext->input_buffer, _pcm3060_i.pcm3060_ext->output_buffer)) )
+    if ( (ret = tx_init(pdev, _pcm3060_i.left_chan_buffer->right_end, _pcm3060_i.right_chan_buffer->right_end)) )
     {
         ERROR("Failed to initialize TRANSCEIVER!");
     }
@@ -57,22 +61,6 @@ static int _remove_pcm3060_device(struct device *pdev)
     return ret;
 }
 
-// static int _enable_pcm3060(struct device *pdev)
-// {
-//     int ret = 0;
-//     TRACE("");
-
-//     return ret;
-// }
-
-// static int _disable_pcm3060(struct device *pdev)
-// {
-//     int ret = 0;
-//     TRACE("");
-
-//     return ret;
-// }
-
 static int _configure_pcm3060(const pcm3060_config_t* const cfg)
 {
     TRACE("");
@@ -89,18 +77,16 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
         ERROR("Failed to allocate memory in the kernel");
         return -1;
     }
-    else if ( (_pcm3060_i.pcm3060_ext->input_buffer = get_pipe_buffer(cfg->buf_size)) == NULL )
+    else if ( (_pcm3060_i.left_chan_buffer = get_duplex_pipe_buffer(cfg->buf_size)) == NULL )
     {
         ERROR("Failed to get Input buffer");
         goto r_conf;
     }
-    else if ( (_pcm3060_i.pcm3060_ext->output_buffer = get_pipe_buffer(cfg->buf_size)) == NULL )
+    else if ( (_pcm3060_i.right_chan_buffer = get_duplex_pipe_buffer(cfg->buf_size)) == NULL )
     {
         ERROR("Failed to get Output buffer");
         goto r_buf;
     }
-
-    TRACE("%p %p ", _pcm3060_i.pcm3060_ext->input_buffer, _pcm3060_i.pcm3060_ext->output_buffer);
 
     *(_pcm3060_i.config) = *cfg;
 
@@ -108,10 +94,31 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
     r_conf:
         kfree(_pcm3060_i.config);
     r_buf:
-        put_pipe_buffer(_pcm3060_i.pcm3060_ext->input_buffer);
+        put_duplex_pipe_buffer(_pcm3060_i.left_chan_buffer);
     return -1;
 }
 
+static duplex_pipe_end_t* _pcm3060_get_channel_buffer_end(unsigned int channel)
+{
+    duplex_pipe_end_t* pipe_end = NULL;
+    
+    switch (channel)
+    {
+    case PCM3060_CHANNEL_ID_LEFT:
+        pipe_end = _pcm3060_i.left_chan_buffer->left_end;
+        break;
+        
+    case PCM3060_CHANNEL_ID_RIGHT:
+        pipe_end = _pcm3060_i.right_chan_buffer->left_end;
+        break;
+    
+    default:
+        WARNING("Invalid Channel id %d", channel);
+        break;
+    }
+
+    return pipe_end;
+}
 
 pcm3060_t* get_pcm3060()
 {
@@ -136,9 +143,8 @@ pcm3060_t* get_pcm3060()
         }
         else
         {
-            
-            _pcm3060_i.pcm3060_ext->input_buffer = NULL;
-            _pcm3060_i.pcm3060_ext->output_buffer = NULL;
+            _pcm3060_i.left_chan_buffer = NULL;
+            _pcm3060_i.right_chan_buffer = NULL;
             _pcm3060_i.config = NULL;
             _pcm3060_i.pcm3060_ext->init = &_configure_pcm3060;
         }
@@ -177,21 +183,21 @@ void put_pcm3060(pcm3060_t* dev_pcm3060)
             
             if (_pcm3060_i.pcm3060_ext != NULL)
             {
-                TRACE("Freeing external interface with buffers in:%p out:%p ", _pcm3060_i.pcm3060_ext->input_buffer, _pcm3060_i.pcm3060_ext->output_buffer);
-                if (_pcm3060_i.pcm3060_ext->input_buffer != NULL)
-                {
-                    TRACE("Freeing input buffer");
-                    put_pipe_buffer(_pcm3060_i.pcm3060_ext->input_buffer);
-                }
-                if (_pcm3060_i.pcm3060_ext->output_buffer != NULL)
-                {
-                    TRACE("Freeing output buffer");
-                    put_pipe_buffer(_pcm3060_i.pcm3060_ext->output_buffer);
-                }
-                _pcm3060_i.pcm3060_ext->input_buffer = NULL;
-                _pcm3060_i.pcm3060_ext->output_buffer = NULL;
-
+                TRACE("Freeing external interface");
                 kfree(_pcm3060_i.pcm3060_ext);
+            }
+
+            if (_pcm3060_i.left_chan_buffer != NULL)
+            {
+                TRACE("Freeing left channel buffer");
+                put_duplex_pipe_buffer(_pcm3060_i.left_chan_buffer);
+                _pcm3060_i.left_chan_buffer = NULL;
+            }
+            if (_pcm3060_i.right_chan_buffer != NULL)
+            {
+                TRACE("Freeing right channel buffer");
+                put_duplex_pipe_buffer(_pcm3060_i.right_chan_buffer);
+                _pcm3060_i.right_chan_buffer = NULL;
             }
             if (_pcm3060_i.config != NULL)
             {

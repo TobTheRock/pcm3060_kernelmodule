@@ -10,6 +10,8 @@
 #define CONFIG_LOGGING_NAME "mod_pcm3060"
 #define CONFIG_DEBUG_LOGGING_ENABLE
 
+#define CONFIG_NCHANNELS 2
+
 /*-------------------------------- ADC Settings ------------------------------------*/
 #define CONFIG_ADC_FS_HZ  100// Sampling frequency from 16 to 192 KHz
 #define CONFIG_ADC_RATIO_SCK1_FS_HZ 128 //Sck1 must be multiples of sampling frequency:  128/192/256/384/512/768 fS
