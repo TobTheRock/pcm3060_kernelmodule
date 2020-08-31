@@ -24,6 +24,7 @@ int main(int argc, const char** argv)
    help_str << "# Usage: ./test_suite <int>, where int:" << std::endl;
    REGISTER_FUNCTION(openDevice_write_and_wait_5s);
    REGISTER_FUNCTION(openDevice_write_and_read);
+   REGISTER_FUNCTION(openDevice_read_10byte);
 
    if (argc != 2)
    {
