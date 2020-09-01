@@ -14,14 +14,14 @@
 
 typedef struct pcm3060_config
 {
-    u32 sck_f; // frequency for sck in Hz
+    u32 fs; // sample rate frequency in Hz
     u32 buf_size; // i/o buffer size in byte
 } pcm3060_config_t;
 
 typedef struct pcm3060
 {
     int (*init) (const pcm3060_config_t* const cfg);
-    const duplex_pipe_end_t* (*get_channel_buffer_end) (unsigned int channel);
+    duplex_pipe_end_t* (*get_channel_buffer_end) (unsigned int channel);
 } pcm3060_t;
 
 //alloacate and setup the struct

@@ -8,6 +8,7 @@
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/slab.h>
+#include <linux/err.h>
 
 #define CHRDEV_PCM3060_MINOR_START 0
 
@@ -18,24 +19,50 @@ typedef struct _chrdev_pcm3060_file_data
     pcm3060_t* pcm3060;
 } _chrdev_pcm3060_file_data_t;
 
-typedef struct _chrdev_pcm3060_dev_data
+#define pcm3060_cfg_defaults \
+{\
+    .fs = CONFIG_DEFAULT_FS_HZ,\
+    .buf_size = CONFIG_DEFAULT_BUF_SIZE\
+}
+
+static struct _chrdev_pcm3060_dev_data
 {
     pcm3060_config_t pcm3060_cfg;
-} _chrdev_pcm3060_dev_data_t;
+} _chrdev_pcm3060_dev_data = {.pcm3060_cfg = pcm3060_cfg_defaults};
 
-static ssize_t nchannels_show(struct device *dev,
-                struct device_attribute *attr, char *buf)
+static ssize_t nchannels_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    // struct chrdev_device *chrdev = dev_get_drvdata(dev);
-
-    // return sprintf(buf, "%d\n", chrdev->id);
-     return sprintf(buf, "BLA\n");
+     return sprintf(buf, "%d\n", CONFIG_NCHANNELS);
 }
 static DEVICE_ATTR_RO(nchannels);
 
+static ssize_t sample_rate_store(struct device *dev,
+                struct device_attribute *attr,
+                const char *buf, size_t count)
+{
+    int data, ret;
+
+    ret = sscanf(buf, "%d", &data);
+    if (!((ret == count) && CONFIG_IS_VALID_FS(data)))
+    {
+        return -EINVAL;
+    }
+
+    _chrdev_pcm3060_dev_data.pcm3060_cfg.fs = data;
+
+    return count;
+}
+
+static ssize_t sample_rate_show(struct device *dev,
+                struct device_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", _chrdev_pcm3060_dev_data.pcm3060_cfg.fs);
+}
+static DEVICE_ATTR_RW(sample_rate);
 
 static struct attribute *_chrdev_pcm3060_attrs[] = {
     &dev_attr_nchannels.attr,
+    &dev_attr_sample_rate.attr,
     NULL,
 };
 
@@ -56,11 +83,6 @@ static struct class *_chrdev_pcm3060_class = NULL;
 
 static int chrdev_pcm3060_open(struct inode * node, struct file * file)
 {
-    // TODO read from SYS CTL
-    pcm3060_config_t cfg = {
-        .sck_f =CONFIG_ADC_FS_HZ,
-        .buf_size = 1000
-        };
     _chrdev_pcm3060_file_data_t* pcm3060_data;
     TRACE("");
     RETURN_ON_NULL(node, -1);
@@ -78,7 +100,7 @@ static int chrdev_pcm3060_open(struct inode * node, struct file * file)
         goto r_fail;
     }
 
-    return pcm3060_data->pcm3060->init(&cfg); // TODO check this and release in case of error
+    return pcm3060_data->pcm3060->init(&_chrdev_pcm3060_dev_data.pcm3060_cfg); // TODO check this and release in case of error
 
     r_fail:
         return -1;
@@ -111,7 +133,7 @@ static long chrdev_pcm3060_ioctl(struct file *file, unsigned int cmd, unsigned l
 static ssize_t chrdev_pcm3060_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
 {
     ssize_t ret = 0;
-    TRACE("Reading %ld bytes from offset offset", count, *offset);
+    TRACE("Reading %ld bytes from offset %ld", count, *offset);
     if (file->private_data)
     {
         _chrdev_pcm3060_file_data_t* pcm3060_data = (_chrdev_pcm3060_file_data_t*) file->private_data;

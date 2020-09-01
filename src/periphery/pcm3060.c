@@ -1,4 +1,5 @@
 #include "pcm3060.h"
+#include <config.h>
 #include <utils/logging.h>
 #include <utils/ptr.h>
 #include <periphery/devicetree.h>
@@ -37,7 +38,7 @@ static int _probe_pcm3060_device(struct device *pdev)
 {
     int ret = 0;
     TRACE("");
-    // if ( (ret = clock_generator_init(pdev, _pcm3060_i.config->sck_f)) )
+    // if ( (ret = clock_generator_init(pdev, CONFIG_GET_CLOCK_SCK_F_HZ(_pcm3060_i.config->fs))) )
     // {
     //     ERROR("Failed to initialize CLOCK!");
     // }
@@ -147,6 +148,7 @@ pcm3060_t* get_pcm3060()
             _pcm3060_i.right_chan_buffer = NULL;
             _pcm3060_i.config = NULL;
             _pcm3060_i.pcm3060_ext->init = &_configure_pcm3060;
+            _pcm3060_i.pcm3060_ext->get_channel_buffer_end = &_pcm3060_get_channel_buffer_end;
         }
         mutex_unlock(&_pcm3060_mutex);
     }
