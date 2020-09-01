@@ -19,6 +19,7 @@ pipe_buffer_t* get_pipe_buffer(const unsigned int size);
 void put_pipe_buffer(pipe_buffer_t* buf);
 
 unsigned int pipe_buffer_copy_from_user(struct pipe_buffer* pipe_buffer, const void* buffer_ext, const unsigned int buflen);
+//marks all data before off as read! -> TODO remove offset?
 unsigned int pipe_buffer_copy_to_user(const struct pipe_buffer* pipe_buffer, void* buffer_ext, const unsigned int buflen, const unsigned int off);
 
 // READER
@@ -28,8 +29,8 @@ unsigned int pipe_buffer_n_bytes_available(const pipe_buffer_t* pipe_buffer);
 unsigned int pipe_buffer_read_start(const pipe_buffer_t* pipe_buffer, void** o_buffer_ptr);
 //waits for data:
 unsigned int pipe_buffer_read_start_waiting(const pipe_buffer_t* pipe_buffer, void** o_buffer_ptr);
-//terminate reading
-void pipe_buffer_read_end(const pipe_buffer_t* pipe_buffer);
+//terminate reading, after sum(n_bytes_read) == n_bytes_available -> reset
+void pipe_buffer_read_end(const pipe_buffer_t* pipe_buffer, const unsigned int n_bytes_read);
 
 //WRITER
 //

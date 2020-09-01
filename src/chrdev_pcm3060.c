@@ -133,7 +133,7 @@ static long chrdev_pcm3060_ioctl(struct file *file, unsigned int cmd, unsigned l
 static ssize_t chrdev_pcm3060_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
 {
     ssize_t ret = 0;
-    TRACE("Reading %ld bytes from offset %ld", count, *offset);
+    TRACE("Reading %ld bytes from offset %lld", count, *offset);
     if (file->private_data)
     {
         _chrdev_pcm3060_file_data_t* pcm3060_data = (_chrdev_pcm3060_file_data_t*) file->private_data;

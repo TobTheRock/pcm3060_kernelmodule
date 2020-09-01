@@ -30,7 +30,7 @@ unsigned int duplex_pipe_end_read_start(const duplex_pipe_end_t* duplex_pipe_end
 //waits for data:
 unsigned int duplex_pipe_end_read_start_waiting(const duplex_pipe_end_t* duplex_pipe_end, void** o_buffer_ptr);
 //terminate reading
-void duplex_pipe_end_read_end(const duplex_pipe_end_t* duplex_pipe_end);
+void duplex_pipe_end_read_end(const duplex_pipe_end_t* duplex_pipe_end, const unsigned int n_bytes_read);
 
 //WRITER
 //

@@ -29,23 +29,22 @@ static struct _thread_in_data
 static int _tx_run(void* unused)
 {
     // unsigned int n_bytes_writtable = 0;
-    static const unsigned int n_bytes_per_read = 16;  //TODO  from config or so
     duplex_pipe_end_t* active_channel = _internal_data.leftchan_buf;
     TRACE("Starting run loop");
 
 
     while(!kthread_should_stop())
     {
-        unsigned int n_bytes_to_write_from_spi = 0, n_bytes_to_read_from_spi = 0;
+        unsigned int n_bytes_to_write_over_spi = 0, n_bytes_to_read_from_spi = 0;
         void *mem_tx = NULL, *mem_rx = NULL;
         if ( duplex_pipe_end_n_bytes_available(active_channel) > 0)
         {
             TRACE("Requesting read from pipe");
-            n_bytes_to_write_from_spi = duplex_pipe_end_read_start(active_channel, &mem_tx);
-
+            n_bytes_to_write_over_spi = duplex_pipe_end_read_start(active_channel, &mem_tx);
+            n_bytes_to_write_over_spi = min(n_bytes_to_write_over_spi, CONFIG_N_BYTE_SIZE_PER_TX);
         }
-        
-        if ((n_bytes_to_read_from_spi = duplex_pipe_end_write_start(active_channel, &mem_rx, n_bytes_per_read)) > 0)
+
+        if ((n_bytes_to_read_from_spi = duplex_pipe_end_write_start(active_channel, &mem_rx, CONFIG_N_BYTE_SIZE_PER_TX)) > 0)
         {
             TRACE("Requesting write to pipe...");
         }
@@ -56,9 +55,9 @@ static int _tx_run(void* unused)
 
         if ((mem_rx != NULL) && (mem_tx != NULL))
         {
-            TRACE("Reading %d and writting %d bytes...", n_bytes_to_read_from_spi, n_bytes_to_write_from_spi);
-            spi_write_then_read(_internal_data.spiDev, mem_tx, n_bytes_to_write_from_spi, mem_rx, n_bytes_to_read_from_spi);
-            duplex_pipe_end_read_end(active_channel); // TODO read only x byte from here so we can have a fixed cycle lenth
+            TRACE("Reading %d and writting %d bytes...", n_bytes_to_read_from_spi, n_bytes_to_write_over_spi);
+            spi_write_then_read(_internal_data.spiDev, mem_tx, n_bytes_to_write_over_spi, mem_rx, n_bytes_to_read_from_spi);
+            duplex_pipe_end_read_end(active_channel, n_bytes_to_write_over_spi); // TODO read only x byte from here so we can have a fixed cycle lenth
             TRACE("FIN Reading from pipe");
             duplex_pipe_end_write_end(active_channel);
             TRACE("FIN writting from pipe");
@@ -75,9 +74,9 @@ static int _tx_run(void* unused)
         }
         else if (mem_tx != NULL)
         {
-            TRACE("Writting %d bytes...", n_bytes_to_write_from_spi);
-            spi_write(_internal_data.spiDev, mem_tx, n_bytes_to_write_from_spi);
-            duplex_pipe_end_read_end(active_channel);
+            TRACE("Writting %d bytes...", n_bytes_to_write_over_spi);
+            spi_write(_internal_data.spiDev, mem_tx, n_bytes_to_write_over_spi);
+            duplex_pipe_end_read_end(active_channel, n_bytes_to_write_over_spi);
             TRACE("FIN Reading from pipe");
         }
         else

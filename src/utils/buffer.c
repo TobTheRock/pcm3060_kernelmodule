@@ -208,17 +208,20 @@ static inline unsigned int  _copy_impl (const struct buffer* this_buffer, void* 
     {
         DEBUG("Buflen is 0, nothing todo");
     }
-    else if (off >= (n_bytes_available = atomic_read(&this_buffer->_impl_p->n_bytes_written)))
+    else if ((n_bytes_available = atomic_read(&this_buffer->_impl_p->n_bytes_written)) <= off)
     {
-        WARN("Offset %d exceeds nof buffered values %d", off, n_bytes_available);
+        WARNING("Offset %u exceeds nof buffered values %u", off, n_bytes_available);
         n_bytes_dropped = buflen;
     }
     else if ( (n_bytes_to_copy = min(n_bytes_available - off, buflen) ) > 0 )
     {
+        TRACE("Copying %d bytes", n_bytes_to_copy);
         n_bytes_dropped = (buflen - n_bytes_to_copy);
         if (fromUser)
         {
-            n_bytes_dropped += copy_to_user(buffer_ext, this_buffer->_impl_p->buf + off, n_bytes_to_copy);
+            TRACE("%d %d", *(unsigned int*)(this_buffer->_impl_p->buf), *(unsigned int*)(this_buffer->_impl_p->buf+1));
+            n_bytes_dropped += copy_to_user(buffer_ext, (this_buffer->_impl_p->buf + off), n_bytes_to_copy);
+            TRACE("Dropped %d bytes", n_bytes_dropped);
         }
         else
         {

@@ -177,10 +177,10 @@ unsigned int duplex_pipe_end_read_start_waiting(const duplex_pipe_end_t* duplex_
     return pipe_buffer_read_start_waiting(duplex_pipe_end->read_buffer, o_buffer_ptr);
 }
 
-void duplex_pipe_end_read_end(const duplex_pipe_end_t* duplex_pipe_end)
+void duplex_pipe_end_read_end(const duplex_pipe_end_t* duplex_pipe_end, const unsigned int n_bytes_read)
 {
     RETURN_VOID_ON_NULL(duplex_pipe_end);
-    return pipe_buffer_read_end(duplex_pipe_end->read_buffer);
+    return pipe_buffer_read_end(duplex_pipe_end->read_buffer, n_bytes_read);
 }
 
 unsigned int duplex_pipe_end_write_start(duplex_pipe_end_t* duplex_pipe_end, void** o_buffer_ptr, const unsigned int n_bytes_requested)
