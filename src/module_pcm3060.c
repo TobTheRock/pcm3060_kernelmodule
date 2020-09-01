@@ -12,7 +12,7 @@
 
 // #include <periphery/clock_generator.h>
 #include <periphery/pcm3060.h>
-static pcm3060_t* pcmdev;
+// static pcm3060_t* pcmdev;
 
 static int __init _pcm3060_module_init(void)
 {

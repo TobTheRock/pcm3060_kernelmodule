@@ -30,9 +30,9 @@ static int _tx_run(void* unused)
 {
     // unsigned int n_bytes_writtable = 0;
     static const unsigned int n_bytes_per_read = 16;  //TODO  from config or so
+    duplex_pipe_end_t* active_channel = _internal_data.leftchan_buf;
     TRACE("Starting run loop");
 
-    duplex_pipe_end_t* active_channel = _internal_data.leftchan_buf;
 
     while(!kthread_should_stop())
     {
@@ -58,7 +58,7 @@ static int _tx_run(void* unused)
         {
             TRACE("Reading %d and writting %d bytes...", n_bytes_to_read_from_spi, n_bytes_to_write_from_spi);
             spi_write_then_read(_internal_data.spiDev, mem_tx, n_bytes_to_write_from_spi, mem_rx, n_bytes_to_read_from_spi);
-            duplex_pipe_end_read_end(active_channel);
+            duplex_pipe_end_read_end(active_channel); // TODO read only x byte from here so we can have a fixed cycle lenth
             TRACE("FIN Reading from pipe");
             duplex_pipe_end_write_end(active_channel);
             TRACE("FIN writting from pipe");
