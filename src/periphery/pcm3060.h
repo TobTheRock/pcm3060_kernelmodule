@@ -7,7 +7,7 @@
 #define KERNELMODULE_PCM3060_PERIPHERY_PCM3060_H
 
 #include <linux/types.h>
-#include <utils/duplex_pipe_buffer.h>
+#include <utils/duplex_ring_buffer.h>
 
 #define PCM3060_CHANNEL_ID_LEFT 0
 #define PCM3060_CHANNEL_ID_RIGHT 1
@@ -21,7 +21,7 @@ typedef struct pcm3060_config
 typedef struct pcm3060
 {
     int (*init) (const pcm3060_config_t* const cfg);
-    duplex_pipe_end_t* (*get_channel_buffer_end) (unsigned int channel);
+    duplex_ring_end_t* (*get_channel_buffer_end) (unsigned int channel);
 } pcm3060_t;
 
 //alloacate and setup the struct

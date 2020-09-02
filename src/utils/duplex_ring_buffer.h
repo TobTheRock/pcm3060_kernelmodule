@@ -24,7 +24,8 @@ unsigned int duplex_ring_end_copy_to_user(const struct duplex_ring_end* duplex_r
 
 // READER
 
-unsigned int duplex_ring_end_n_bytes_available(const duplex_ring_end_t* duplex_ring_end);
+unsigned int duplex_ring_end_n_bytes_readable(const duplex_ring_end_t* duplex_ring_end);
+unsigned int duplex_ring_end_n_bytes_writable(const duplex_ring_end_t* duplex_ring_end);
 // start reading by copy, return NOF bytes dropped
 unsigned int duplex_ring_end_read(const duplex_ring_end_t* duplex_ring_end, void* o_buffer_ptr, const unsigned int buflen);
 //WRITER

@@ -137,18 +137,18 @@ static ssize_t chrdev_pcm3060_read(struct file *file, char __user *buf, size_t c
     if (file->private_data)
     {
         _chrdev_pcm3060_file_data_t* pcm3060_data = (_chrdev_pcm3060_file_data_t*) file->private_data;
-        duplex_pipe_end_t* pipe_end;
+        duplex_ring_end_t* ring_end;
         if (pcm3060_data->pcm3060 == NULL)
         {
             ERROR("No pcm3060 struct!");
         }
-        else if ( (pipe_end = pcm3060_data->pcm3060->get_channel_buffer_end(pcm3060_data->channel)) == NULL)
+        else if ( (ring_end = pcm3060_data->pcm3060->get_channel_buffer_end(pcm3060_data->channel)) == NULL)
         {
             ERROR("No buffer for channel %d!", pcm3060_data->channel);
         }
         else
         {
-            ret = duplex_pipe_end_copy_to_user(pipe_end, buf, count, *offset);
+            ret = duplex_ring_end_copy_to_user(ring_end, buf, count);
             *offset += ret;
         }
     }
@@ -163,16 +163,16 @@ static ssize_t chrdev_pcm3060_write(struct file *file, const char __user *buf, s
     if (file->private_data)
     {
         _chrdev_pcm3060_file_data_t* pcm3060_data = (_chrdev_pcm3060_file_data_t*) file->private_data;
-        duplex_pipe_end_t* pipe_end;
+        duplex_ring_end_t* ring_end;
         if (pcm3060_data->pcm3060 == NULL)
         {
             ERROR("No pcm3060 struct!");
         }
-        else if ( (pipe_end = pcm3060_data->pcm3060->get_channel_buffer_end(pcm3060_data->channel)) == NULL)
+        else if ( (ring_end = pcm3060_data->pcm3060->get_channel_buffer_end(pcm3060_data->channel)) == NULL)
         {
             ERROR("No buffer for channel %d!", pcm3060_data->channel);
         }
-        else if (duplex_pipe_end_copy_from_user(pipe_end, buf, count))
+        else if (duplex_ring_end_copy_from_user(ring_end, buf, count))
         {
             ERROR("Writing to input buffer failed!");
         }

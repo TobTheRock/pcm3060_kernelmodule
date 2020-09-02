@@ -35,6 +35,8 @@
 #define CONFIG_N_BIT_PER_TX 24 // TODO check how this works with SPU
 #define CONFIG_N_BYTE_SIZE_PER_TX ((unsigned int)(1 + (((CONFIG_N_BIT_PER_TX) - 1) / (8))))
 
+#define CONFIG_SPI_WORD_LEN 16
+#define CONFIG_SPI_N_BYTE_PER_TX 4
 
 #define CONFIG_DEFAULT_BUF_SIZE 512 // buf size of each duplex buffer
 

@@ -24,6 +24,7 @@ unsigned int ring_buffer_copy_from_user (ring_buffer_t* ring, const void* buf, u
 
 unsigned int  ring_buffer_read (const ring_buffer_t* ring, void* buf, unsigned int buflen);
 unsigned int ring_buffer_copy_to_user (const ring_buffer_t* ring, void* buf, unsigned int buflen);
-unsigned int ring_buffer_n_bytes_available(const ring_buffer_t* ring);
+unsigned int ring_buffer_n_bytes_readable(const ring_buffer_t* ring);
+unsigned int ring_buffer_n_bytes_writable(const ring_buffer_t* ring);
 
 #endif // !KERNELMODULE_PCM3060_UTILS_RING_BUFFER_H

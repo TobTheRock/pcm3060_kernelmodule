@@ -19,8 +19,8 @@ typedef struct
     pcm3060_t* pcm3060_ext;
     struct device* pdev;
     pcm3060_config_t* config;
-    duplex_pipe_buffer_t* left_chan_buffer;
-    duplex_pipe_buffer_t* right_chan_buffer;
+    duplex_ring_buffer_t* left_chan_buffer;
+    duplex_ring_buffer_t* right_chan_buffer;
     atomic_t refcount;
 } _pcm3060_internal_t;
 
@@ -78,12 +78,12 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
         ERROR("Failed to allocate memory in the kernel");
         return -1;
     }
-    else if ( (_pcm3060_i.left_chan_buffer = get_duplex_pipe_buffer(cfg->buf_size)) == NULL )
+    else if ( (_pcm3060_i.left_chan_buffer = get_duplex_ring_buffer(cfg->buf_size)) == NULL )
     {
         ERROR("Failed to get Input buffer");
         goto r_conf;
     }
-    else if ( (_pcm3060_i.right_chan_buffer = get_duplex_pipe_buffer(cfg->buf_size)) == NULL )
+    else if ( (_pcm3060_i.right_chan_buffer = get_duplex_ring_buffer(cfg->buf_size)) == NULL )
     {
         ERROR("Failed to get Output buffer");
         goto r_buf;
@@ -95,13 +95,13 @@ static int _configure_pcm3060(const pcm3060_config_t* const cfg)
     r_conf:
         kfree(_pcm3060_i.config);
     r_buf:
-        put_duplex_pipe_buffer(_pcm3060_i.left_chan_buffer);
+        put_duplex_ring_buffer(_pcm3060_i.left_chan_buffer);
     return -1;
 }
 
-static duplex_pipe_end_t* _pcm3060_get_channel_buffer_end(unsigned int channel)
+static duplex_ring_end_t* _pcm3060_get_channel_buffer_end(unsigned int channel)
 {
-    duplex_pipe_end_t* pipe_end = NULL;
+    duplex_ring_end_t* pipe_end = NULL;
     
     switch (channel)
     {
@@ -192,13 +192,13 @@ void put_pcm3060(pcm3060_t* dev_pcm3060)
             if (_pcm3060_i.left_chan_buffer != NULL)
             {
                 TRACE("Freeing left channel buffer");
-                put_duplex_pipe_buffer(_pcm3060_i.left_chan_buffer);
+                put_duplex_ring_buffer(_pcm3060_i.left_chan_buffer);
                 _pcm3060_i.left_chan_buffer = NULL;
             }
             if (_pcm3060_i.right_chan_buffer != NULL)
             {
                 TRACE("Freeing right channel buffer");
-                put_duplex_pipe_buffer(_pcm3060_i.right_chan_buffer);
+                put_duplex_ring_buffer(_pcm3060_i.right_chan_buffer);
                 _pcm3060_i.right_chan_buffer = NULL;
             }
             if (_pcm3060_i.config != NULL)

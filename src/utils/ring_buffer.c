@@ -213,7 +213,7 @@ unsigned int ring_buffer_copy_to_user (const ring_buffer_t* ring, void* buf, uns
     return _read_impl(ring, buf, buflen, 1);
 }
 
-unsigned int ring_buffer_n_bytes_available(const ring_buffer_t* ring)
+unsigned int ring_buffer_n_bytes_readable(const ring_buffer_t* ring)
 {
     unsigned int bytesRead, bytesWritten;
     TRACE("");
@@ -221,6 +221,16 @@ unsigned int ring_buffer_n_bytes_available(const ring_buffer_t* ring)
     bytesWritten = atomic_read(&ring->_impl_p->write_idx);
 
     return _get_ring_distance(bytesRead, bytesWritten , ring->size);
+}
+
+unsigned int ring_buffer_n_bytes_writable(const ring_buffer_t* ring)
+{
+    unsigned int bytesRead, bytesWritten;
+    TRACE("");
+    bytesRead = atomic_read(&ring->_impl_p->read_idx);
+    bytesWritten = atomic_read(&ring->_impl_p->write_idx);
+
+    return _get_ring_distance(bytesWritten, bytesRead, ring->size);
 }
 
 ring_buffer_t* get_ring_buffer(const unsigned int size)

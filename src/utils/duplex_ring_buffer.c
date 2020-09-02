@@ -161,11 +161,18 @@ unsigned int duplex_ring_end_copy_to_user(const struct duplex_ring_end* duplex_r
     
 }
 
-unsigned int duplex_ring_end_n_bytes_available(const duplex_ring_end_t* duplex_ring_end)
+unsigned int duplex_ring_end_n_bytes_readable(const duplex_ring_end_t* duplex_ring_end)
 {
     TRACE("");
     RETURN_ON_NULL(duplex_ring_end, 0);
-    return ring_buffer_n_bytes_available(duplex_ring_end->read_buffer);
+    return ring_buffer_n_bytes_readable(duplex_ring_end->read_buffer);
+}
+
+unsigned int duplex_ring_end_n_bytes_writable(const duplex_ring_end_t* duplex_ring_end)
+{
+    TRACE("");
+    RETURN_ON_NULL(duplex_ring_end, 0);
+    return ring_buffer_n_bytes_writable(duplex_ring_end->write_buffer);
 }
 
 unsigned int duplex_ring_end_read(const duplex_ring_end_t* duplex_ring_end, void* o_buffer_ptr, const unsigned int buflen)
