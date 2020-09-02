@@ -161,36 +161,42 @@ unsigned int duplex_pipe_end_copy_to_user(const struct duplex_pipe_end* duplex_p
 
 unsigned int duplex_pipe_end_n_bytes_available(const duplex_pipe_end_t* duplex_pipe_end)
 {
+    TRACE("");
     RETURN_ON_NULL(duplex_pipe_end, 0);
     return pipe_buffer_n_bytes_available(duplex_pipe_end->read_buffer);
 }
 
 unsigned int duplex_pipe_end_read_start(const duplex_pipe_end_t* duplex_pipe_end, void** o_buffer_ptr)
 {
+    TRACE("");
     RETURN_ON_NULL(duplex_pipe_end, 0);
     return pipe_buffer_read_start(duplex_pipe_end->read_buffer, o_buffer_ptr);
 }
 
 unsigned int duplex_pipe_end_read_start_waiting(const duplex_pipe_end_t* duplex_pipe_end, void** o_buffer_ptr)
 {
+    TRACE("");
     RETURN_ON_NULL(duplex_pipe_end, 0);
     return pipe_buffer_read_start_waiting(duplex_pipe_end->read_buffer, o_buffer_ptr);
 }
 
 void duplex_pipe_end_read_end(const duplex_pipe_end_t* duplex_pipe_end, const unsigned int n_bytes_read)
 {
+    TRACE("");
     RETURN_VOID_ON_NULL(duplex_pipe_end);
     return pipe_buffer_read_end(duplex_pipe_end->read_buffer, n_bytes_read);
 }
 
 unsigned int duplex_pipe_end_write_start(duplex_pipe_end_t* duplex_pipe_end, void** o_buffer_ptr, const unsigned int n_bytes_requested)
 {
+    TRACE("");
     RETURN_ON_NULL(duplex_pipe_end, 0);
     return pipe_buffer_write_start(duplex_pipe_end->write_buffer, o_buffer_ptr, n_bytes_requested);
 }
 
 void duplex_pipe_end_write_end(duplex_pipe_end_t* duplex_pipe_end)
 {
+    TRACE("");
     RETURN_VOID_ON_NULL(duplex_pipe_end);
     return pipe_buffer_write_end(duplex_pipe_end->write_buffer);
 }
