@@ -37,7 +37,7 @@ int clock_generator_init(struct device *pdev, const unsigned int frequency)
     else if (dev_pwm_sck == NULL)
     {
         INFO("Requesting PWM for SCK1");
-        dev_pwm_sck = devm_pwm_get(pdev, DEVICETREE_PCM3060_SCK1_PWMNAME);
+        dev_pwm_sck = devm_pwm_get(pdev, DEVICETREE_PCM3060_SCK_PWM_NAME);
         if (IS_ERR(dev_pwm_sck))
         {
             ERROR("Requesting PWM  for SCK1 failed %d", ERR_CAST(dev_pwm_sck));

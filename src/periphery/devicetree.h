@@ -14,8 +14,8 @@
 
 /*-------------------------------- Device Tree Settings ------------------------------------*/
 #define DEVICETREE_PCM3060_COMPATIBLE "ext_pcm3060"
-#define DEVICETREE_PCM3060_SCK2_PWMNAME "pwm_pcm3060_sck2"
-#define DEVICETREE_PCM3060_SCK1_PWMNAME "pwm_pcm3060_sck1"
+#define DEVICETREE_PCM3060_SCK_PWM_NAME "pwm_pcm3060"
+#define DEVICETREE_PCM3060_SPI_NAME "spi_pcm3060"
 
 struct device* dt_find_pcm3060_device(void);
 

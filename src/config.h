@@ -28,7 +28,7 @@
 /*-------------------------------- Treansceiver Settings ------------------------------------*/
 /* Available formats
 24-bit I2S format
-24-bit left-justified format -> that's what we use for now
+24-bit left-justified format -> that's what we use for now => For SPI CPOL=1 CPHA=1
 24-bit right-justified format
 16-bit right-justified format
  */

@@ -5,9 +5,10 @@
  */
 
 #include "transceiver.h"
+#include "devicetree.h"
+#include <config.h>
 #include <utils/spi.h>
 #include <utils/ptr.h>
-#include <config.h>
 #include <utils/logging.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
@@ -16,6 +17,9 @@
 
 #include <linux/delay.h> // todo RM
 #include <linux/jiffies.h> // todo RM
+
+#define SPIMODE_LEFT_CHANNEL  SPI_CS_HIGH | SPI_MODE_3  // CHIP select high when active, CPOL = 1, CPHA = 1
+#define SPIMODE_RIGHT_CHANNEL SPI_MODE_3                // CPOL = 1, CPHA = 1
 
 static struct task_struct* etx_spi_thread;
 DECLARE_COMPLETION(tx_completion);
@@ -106,6 +110,7 @@ static int _tx_run(void* unused)
 
 int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_end_t* rightchan_buf)
 {
+    
     struct spi_device* ext_spi_dev;
 
     if ((pdev == NULL) || (leftchan_buf == NULL) || (rightchan_buf == NULL))
@@ -117,10 +122,10 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
     _internal_data.rightchan_buf = rightchan_buf;
 
     INFO("Requesting SPI for ADC");
-    ext_spi_dev = spi_get(pdev, "spi_pcm3060_adc");
+    ext_spi_dev = spi_get(pdev, DEVICETREE_PCM3060_SPI_NAME);
     if (!ext_spi_dev)
     {
-        ERROR("No spi device %s found", "spi_pcm3060_adc");
+        ERROR("No spi device %s found", DEVICETREE_PCM3060_SPI_NAME);
         return ENXIO;
     }
     else
@@ -137,10 +142,14 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
         ext_spi_dev->max_speed_hz = 50000;
         ext_spi_dev->bits_per_word = CONFIG_SPI_WORD_LEN;
         // ext_spi_dev->max_speed_hz = CONFIG_ADC_CLOCK_BCK1_F_HZ;
-        ext_spi_dev->mode = SPI_MODE_1; // CPOL = 0, CPHA = 1
+        // ext_spi_dev->mode = SPI_MODE_1; // CPOL = 0, CPHA = 1
         // ext_spi_dev->bits_per_word = CONFIG_WORD_SIZE_PER_TX;
 
-        spi_setup(ext_spi_dev);
+        if (spi_setup(ext_spi_dev))
+        {
+            ERROR("Could not setup SPI device!");
+            return  ENXIO;
+        }
     }
 
 
