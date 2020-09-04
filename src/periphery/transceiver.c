@@ -32,71 +32,112 @@ static struct _thread_in_data
     duplex_ring_end_t* rightchan_buf;
 } _internal_data = {NULL, NULL, NULL};
 
+// typedef union
+// {
+//     u32 word;
+//     u8 bytes[4];
+// } ;
+
+
+static int _tx_rx_on_channel(duplex_ring_end_t* active_channel, unsigned int lrck_low)
+{
+    unsigned int n_bytes_to_write_over_spi = 0, n_bytes_to_read_from_spi = 0;
+    int ret = 0;
+    // u8 mem_tx[CONFIG_SPI_N_BYTE_PER_TX] = {0}, mem_rx[CONFIG_SPI_N_BYTE_PER_TX] = {0};
+     u32 mem_tx[1] = {0}, mem_rx[1] = {0};
+
+    if ( (n_bytes_to_write_over_spi = duplex_ring_end_n_bytes_readable(active_channel)) > 0)
+    {
+        // unsigned int byte_it;
+        TRACE("Bytes readable in TX ring buffer %d", n_bytes_to_write_over_spi);
+        n_bytes_to_write_over_spi = min(n_bytes_to_write_over_spi, CONFIG_N_BYTE_SIZE_PER_TX);
+        duplex_ring_end_read(active_channel, mem_tx, n_bytes_to_write_over_spi); // TODO bytes dropped?
+        // for (byte_it = 0; byte_it < (CONFIG_N_BYTE_SIZE_PER_TX-n_bytes_to_write_over_spi); byte_it++)
+        // {
+        //     *(mem_tx+byte_it) = 0;
+        // }
+        
+    }
+
+    if ((n_bytes_to_read_from_spi = duplex_ring_end_n_bytes_writable(active_channel)) > 0)
+    {
+        TRACE("Bytes writable in RX ring buffer %d", n_bytes_to_read_from_spi);
+        n_bytes_to_read_from_spi = min(n_bytes_to_read_from_spi, CONFIG_N_BYTE_SIZE_PER_TX);
+    }
+    else
+    {
+        WARNING("RX buffer is full, data might be lost!");
+    }
+
+    if ((n_bytes_to_write_over_spi == 0) && (n_bytes_to_read_from_spi == 0))
+    {
+        WARNING("Cannot do anything!");
+        ret = -1;
+    }
+    else
+    {
+        // _internal_data.spiDev-> setCs ? directly?
+        TRACE("Reading %d and writting %d bytes...", n_bytes_to_read_from_spi, n_bytes_to_write_over_spi);
+        // spi_write_then_read(_internal_data.spiDev, mem_tx, CONFIG_SPI_N_BYTE_PER_TX, mem_rx, CONFIG_SPI_N_BYTE_PER_TX);
+        struct spi_transfer	t = {
+        .tx_buf		= mem_tx,
+        .rx_buf		= mem_rx,
+        .len		= CONFIG_SPI_N_BYTE_PER_TX,
+         .bits_per_word = CONFIG_SPI_WORD_LEN,
+        // .cs_change = lrck_low,          //TODO rm this does not work
+		};
+
+	    spi_sync_transfer(_internal_data.spiDev, &t, 1);  //TODO async speedup
+        TRACE("Got  %d %d %d %d...", * (u8*)mem_rx, *(u8*)(mem_rx+1), *(u8*)(mem_rx+2), *(u8*)(mem_rx+3));
+        // TRACE("Got  %d ...", *mem_rx);
+        if (n_bytes_to_read_from_spi)
+        {
+            TRACE("Writing to RX ring buffer...");
+            duplex_ring_end_write(active_channel, mem_rx, n_bytes_to_read_from_spi); // TODO bytes dropped?
+        }
+    }
+
+    return ret;
+}
+
 static int _tx_run(void* unused)
 {
     // unsigned int n_bytes_writtable = 0;
-    duplex_ring_end_t* active_channel = _internal_data.leftchan_buf;
-    u8 *mem_tx = NULL, *mem_rx = NULL;
+    // duplex_ring_end_t* active_channel = _internal_data.leftchan_buf;
+    // u8 *mem_tx = NULL, *mem_rx = NULL;
 
-    mem_tx = kcalloc(CONFIG_SPI_N_BYTE_PER_TX, sizeof(u8), GFP_KERNEL);
-    RETURN_ON_NULL(mem_tx,-1);
-    mem_rx = kcalloc(CONFIG_SPI_N_BYTE_PER_TX, sizeof(u8), GFP_KERNEL);
-    RETURN_ON_NULL(mem_rx,-1);
+    // mem_tx = kcalloc(CONFIG_SPI_N_BYTE_PER_TX, sizeof(u8), GFP_KERNEL);
+    // RETURN_ON_NULL(mem_tx,-1);q
+    // mem_rx = kcalloc(CONFIG_SPI_N_BYTE_PER_TX, sizeof(u8), GFP_KERNEL);
+    // RETURN_ON_NULL(mem_rx,-1);
 
     TRACE("Starting run loop");
+    TRACE("RX/TX at most %d byte per LRCK half cycle", CONFIG_SPI_N_BYTE_PER_TX);
     while(!kthread_should_stop())
     {
-        unsigned int n_bytes_to_write_over_spi = 0, n_bytes_to_read_from_spi = 0;
-        
-        if ( (n_bytes_to_write_over_spi = duplex_ring_end_n_bytes_readable(active_channel)) > 0)
-        {
-            unsigned int byte_it;
-            TRACE("Bytes readable in TX ring buffer %d", n_bytes_to_write_over_spi);
-            n_bytes_to_write_over_spi = min(n_bytes_to_write_over_spi, CONFIG_N_BYTE_SIZE_PER_TX);
-            duplex_ring_end_read(active_channel, mem_tx, n_bytes_to_write_over_spi); // TODO bytes dropped?
-            for (byte_it = 0; byte_it < (CONFIG_N_BYTE_SIZE_PER_TX-n_bytes_to_write_over_spi); byte_it++)
-            {
-                *(mem_tx+byte_it) = 0;
-            }
-            
-        }
+        int err;
+        // TRACE("SETUP");
+        // _internal_data.spiDev->mode = SPIMODE_LEFT_CHANNEL;
+        // if (spi_setup(_internal_data.spiDev))
+        // {
+        //     ERROR("Could not setup SPI device!");
+        //     return -ENXIO;
+        // }
+        TRACE("LCHAN");
+        err = _tx_rx_on_channel(_internal_data.leftchan_buf,1);
+        //TOGGLE SPI
 
-        if ((n_bytes_to_read_from_spi = duplex_ring_end_n_bytes_writable(active_channel)) > 0)
-        {
-            TRACE("Bytes readable in RX ring buffer %d", n_bytes_to_read_from_spi);
-            n_bytes_to_read_from_spi = min(n_bytes_to_write_over_spi, CONFIG_N_BYTE_SIZE_PER_TX);
-        }
-        else
-        {
-            WARNING("RX buffer is full, data might be lost!");
-        }
+        // TRACE("SETUP");
+        // _internal_data.spiDev->mode = SPIMODE_RIGHT_CHANNEL;
+        // if (spi_setup(_internal_data.spiDev))
+        // {
+        //     ERROR("Could not setup SPI device!");
+        //     return -ENXIO;
+        // }
+        TRACE("RCHAN");
+        err |= _tx_rx_on_channel(_internal_data.rightchan_buf,0);
 
-        if ((n_bytes_to_write_over_spi > 0) && (n_bytes_to_read_from_spi > 0))
-        {
-            TRACE("Reading %d and writting %d bytes...", n_bytes_to_read_from_spi, n_bytes_to_write_over_spi);
-            spi_write_then_read(_internal_data.spiDev, mem_tx, CONFIG_SPI_N_BYTE_PER_TX, mem_rx, CONFIG_SPI_N_BYTE_PER_TX);
-
-            TRACE("Writing to RX ring buffer...");
-            duplex_ring_end_read(active_channel, mem_rx, n_bytes_to_read_from_spi); // TODO bytes dropped?
-        }
-        else if (n_bytes_to_read_from_spi > 0)
-        {
-            TRACE("Reading %d bytes to %p...", n_bytes_to_read_from_spi, mem_rx);
-            TRACE("Before %d %d...", * (u8*)mem_rx, *(u8*)(mem_rx+1));
-            spi_read(_internal_data.spiDev, mem_rx, n_bytes_to_read_from_spi);
-            TRACE("Got %d %d...", *(u8*)mem_rx, *(u8*)(mem_rx+1));
-
-            TRACE("Writing to RX ring buffer...");
-            duplex_ring_end_read(active_channel, mem_rx, n_bytes_to_read_from_spi); // TODO bytes dropped?
-            
-        }
-        else if (n_bytes_to_write_over_spi > 0)
-        {
-            TRACE("Writting %d bytes...", n_bytes_to_write_over_spi);
-            spi_write(_internal_data.spiDev, mem_tx, CONFIG_SPI_N_BYTE_PER_TX);
-            TRACE("FIN Reading from pipe");
-        }
-        else
+        if(err)
         {
             set_current_state(TASK_INTERRUPTIBLE);
             WARNING("Cannot do anything sleeping!");
@@ -142,7 +183,7 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
         ext_spi_dev->max_speed_hz = 50000;
         ext_spi_dev->bits_per_word = CONFIG_SPI_WORD_LEN;
         // ext_spi_dev->max_speed_hz = CONFIG_ADC_CLOCK_BCK1_F_HZ;
-        // ext_spi_dev->mode = SPI_MODE_1; // CPOL = 0, CPHA = 1
+        ext_spi_dev->mode = SPI_MODE_3; // CPOL = 1, CPHA = 1
         // ext_spi_dev->bits_per_word = CONFIG_WORD_SIZE_PER_TX;
 
         if (spi_setup(ext_spi_dev))
