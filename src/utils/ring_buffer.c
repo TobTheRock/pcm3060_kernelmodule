@@ -17,24 +17,6 @@ typedef struct _ring_buffer_impl
     struct mutex mx;
 } _ring_buffer_impl_t;
 
-
-static inline unsigned int _get_ring_distance(const unsigned int start, const unsigned end, const unsigned ringsize)
-{
-    unsigned int distance;
-
-    if (end < start)
-    {
-        distance = ringsize - (start - end);
-    }
-    else
-    {
-        distance = end - start;
-    }
-
-    return distance;
-}
-
-
 static inline _ring_buffer_impl_t* get_ringbuffer_impl(const unsigned int size)
 {
     _ring_buffer_impl_t* newbuf;
@@ -78,57 +60,53 @@ static inline unsigned int _write_impl (ring_buffer_t* ring, const void* buf, co
 {
     const unsigned int ringbufsize = ring->size;
     unsigned int n_bytes_dropped = 0;
+    unsigned int bytes_to_write_from_start, bytes_to_write_from_idx, wr_idx, rd_idx;
     TRACE("");
     RETURN_ON_NULL(ring, buflen);
     RETURN_ON_NULL(buf, buflen);
 
-    if (buflen > ringbufsize)
+
+    mutex_lock(&ring->_impl_p->mx);     // TODO: probably no mutex is needed, when increasing the write cnt first
+
+    
+    wr_idx = atomic_read(&ring->_impl_p->write_idx); // increase write count for next reader
+    rd_idx = atomic_read(&ring->_impl_p->read_idx);
+
+    if (rd_idx > wr_idx)
     {
-        ERROR("Ringbuffer with size %d is to small for write with %d bytes", ringbufsize, buflen);
-        return buflen;
+        bytes_to_write_from_idx = min((rd_idx - wr_idx), buflen);
+        bytes_to_write_from_start = 0;
     }
     else
     {
-        unsigned int bytesToEnd, bytesToWriteAtStart, bytesToWriteAtEnd,
-                     bytesWritten, bytesRead, maxBytesWritable;
+        bytes_to_write_from_idx = min(buflen, (ringbufsize-wr_idx));
+        bytes_to_write_from_start = (bytes_to_write_from_idx < buflen)? min((buflen-bytes_to_write_from_idx), (wr_idx-rd_idx)) : 0;
+    }
 
-        mutex_lock(&ring->_impl_p->mx);     // TODO: probably no mutex is needed, when increasing the write cnt first
-        bytesWritten = atomic_read(&ring->_impl_p->write_idx); // increase write count for next reader
-        bytesRead = atomic_read(&ring->_impl_p->read_idx);
-        maxBytesWritable = _get_ring_distance(bytesWritten, bytesRead, ringbufsize);
+    n_bytes_dropped = buflen - bytes_to_write_from_idx - bytes_to_write_from_start;
+    TRACE("Setting new write_idx %d", (wr_idx + bytes_to_write_from_idx + bytes_to_write_from_start)%ringbufsize);
+    atomic_set(&ring->_impl_p->write_idx, (wr_idx + bytes_to_write_from_idx + bytes_to_write_from_start) % ringbufsize);
 
-        if (buflen >  maxBytesWritable )
+    TRACE("Copying at index %d and at begin %d bytes", bytes_to_write_from_idx, bytes_to_write_from_start);
+    if (fromUser)
+    {
+        n_bytes_dropped += copy_from_user( ring->_impl_p->buf + wr_idx, buf, bytes_to_write_from_idx);
+        if (bytes_to_write_from_start)
         {
-            WARNING("Ringbuffer overflow! Cannot write %d bytes, only space left for %d", buflen, maxBytesWritable);
-            n_bytes_dropped = buflen - maxBytesWritable;
+            n_bytes_dropped += copy_from_user( ring->_impl_p->buf, buf, bytes_to_write_from_start);
         }
-
-        bytesToEnd = ringbufsize - bytesWritten;
-
-        bytesToWriteAtStart = (bytesToEnd < buflen) ? (buflen-bytesToEnd) : (0);
-        bytesToWriteAtEnd = (bytesToWriteAtStart)? buflen : bytesToEnd;
-
-        if (fromUser)
-        {
-            n_bytes_dropped += copy_from_user( ring->_impl_p->buf + bytesWritten, buf, bytesToWriteAtEnd);
-            if (bytesToWriteAtStart)
-            {
-                n_bytes_dropped += copy_from_user( ring->_impl_p->buf, buf, bytesToWriteAtStart);
-            }
-
-        }
-        else
-        {
-            memcpy(ring->_impl_p->buf + bytesWritten, buf, bytesToWriteAtEnd);
-            if ( bytesToWriteAtStart )
-            {
-                memcpy( ring->_impl_p->buf, buf, bytesToWriteAtStart);
-            }
-        }
-
-        mutex_unlock(&ring->_impl_p->mx);
 
     }
+    else
+    {
+        memcpy(ring->_impl_p->buf + wr_idx, buf, bytes_to_write_from_idx);
+        if ( bytes_to_write_from_start )
+        {
+            memcpy( ring->_impl_p->buf, buf, bytes_to_write_from_start);
+        }
+    }
+
+    mutex_unlock(&ring->_impl_p->mx);
 
     return n_bytes_dropped;
 }
@@ -147,51 +125,53 @@ unsigned int ring_buffer_copy_from_user (ring_buffer_t* ring, const void* buf, u
 
 static inline unsigned int _read_impl (const ring_buffer_t* ring, void* buf, unsigned int buflen, bool fromUser)
 {
-    unsigned int ret_bytes_read = 0, n_bytes_dropped = 0;
-    unsigned int bytesToEnd, bytesToReadAtStart, bytesToReadAtEnd,
-                    bytesRead, bytesWritten, ringbufsize, nbytes_toread, maxBytesReadable;
+    const unsigned int ringbufsize = ring->size;
+    unsigned int n_bytes_dropped = 0;
+    unsigned int bytes_to_read_from_start, bytes_to_read_from_idx,  wr_idx, rd_idx;
     TRACE("");
     RETURN_ON_NULL(ring, buflen);
     RETURN_ON_NULL(buf, buflen);
 
 
+    mutex_lock(&ring->_impl_p->mx);     // TODO: probably no mutex is needed, when increasing the write cnt first
 
-    ringbufsize = ring->size;
-    mutex_lock(&ring->_impl_p->mx);    // TODO: probably no mutex is needed, when increasing the rd cnt first
+    
+    wr_idx = atomic_read(&ring->_impl_p->write_idx); // increase write count for next reader
+    rd_idx = atomic_read(&ring->_impl_p->read_idx);
 
-    bytesRead = atomic_read(&ring->_impl_p->read_idx);
-    bytesWritten = atomic_read(&ring->_impl_p->write_idx);
+    if (rd_idx > wr_idx)
+    {
+        bytes_to_read_from_idx = min(buflen, (ringbufsize-rd_idx));
+        bytes_to_read_from_start = (bytes_to_read_from_idx < buflen) ? min((buflen-bytes_to_read_from_idx), (wr_idx-rd_idx)) : 0;
+    }
+    else
+    {
+        bytes_to_read_from_idx = min((rd_idx - wr_idx), buflen);
+        bytes_to_read_from_start = 0;
+    }
+    n_bytes_dropped = buflen - bytes_to_read_from_idx - bytes_to_read_from_start;
+    TRACE("Setting new read_idx %d", (rd_idx + bytes_to_read_from_idx + bytes_to_read_from_start)%ringbufsize);
+    atomic_set(&ring->_impl_p->read_idx, (rd_idx + bytes_to_read_from_idx + bytes_to_read_from_start)%ringbufsize);
+    TRACE("Copying from index %d and from begin %d bytes", bytes_to_read_from_idx, bytes_to_read_from_start);
 
-    maxBytesReadable = _get_ring_distance(bytesRead, bytesWritten , ringbufsize);
-
-    bytesToEnd = ringbufsize - bytesRead;
-    nbytes_toread = min(buflen, maxBytesReadable);
-
-    bytesToReadAtStart = (bytesToEnd < nbytes_toread) ? (nbytes_toread-bytesToEnd) : (0);
-    bytesToReadAtEnd = (bytesToReadAtStart)? nbytes_toread : bytesToEnd;
     if (fromUser)
     {
-        n_bytes_dropped += copy_to_user(buf, ring->_impl_p->buf + bytesRead, bytesToReadAtEnd);
-        if (bytesToReadAtStart)
+        TRACE("Copy to user %d %d %d %d...", * (u8*)ring->_impl_p->buf, *(u8*)(ring->_impl_p->buf+1), *(u8*)(ring->_impl_p->buf+2), *(u8*)(ring->_impl_p->buf+3));
+        n_bytes_dropped += copy_to_user(buf, ring->_impl_p->buf + rd_idx, bytes_to_read_from_idx);
+        if (bytes_to_read_from_start)
         {
-            n_bytes_dropped += copy_to_user(buf, ring->_impl_p->buf, bytesToReadAtStart);
+            n_bytes_dropped += copy_to_user(buf, ring->_impl_p->buf, bytes_to_read_from_start);
         }
     }
     else
     {
-        memcpy(buf, ring->_impl_p->buf + bytesRead, bytesToReadAtEnd);
-        if (bytesToReadAtStart)
+        memcpy(buf, ring->_impl_p->buf + rd_idx, bytes_to_read_from_idx);
+        if (bytes_to_read_from_start)
         {
-            memcpy(buf, ring->_impl_p->buf, bytesToReadAtStart);
+            memcpy(buf, ring->_impl_p->buf, bytes_to_read_from_start);
         }
     }
 
-    if (ret_bytes_read)
-    {
-        TRACE("Setting new read_idx %d", (bytesRead+nbytes_toread)%ringbufsize);
-        atomic_set(&ring->_impl_p->write_idx,
-                    (bytesRead+nbytes_toread)%ringbufsize);
-    }
 
     mutex_unlock(&ring->_impl_p->mx);
     
@@ -215,22 +195,39 @@ unsigned int ring_buffer_copy_to_user (const ring_buffer_t* ring, void* buf, uns
 
 unsigned int ring_buffer_n_bytes_readable(const ring_buffer_t* ring)
 {
-    unsigned int bytesRead, bytesWritten;
+    unsigned int wr_idx, rd_idx, n_bytes_readable;
     TRACE("");
-    bytesRead = atomic_read(&ring->_impl_p->read_idx);
-    bytesWritten = atomic_read(&ring->_impl_p->write_idx);
+    wr_idx = atomic_read(&ring->_impl_p->write_idx);
+    rd_idx = atomic_read(&ring->_impl_p->read_idx);
+    if (rd_idx > wr_idx)
+    {
+        n_bytes_readable = ring->size - (rd_idx - wr_idx); // = size - bytes_not_readable
+    }
+    else
+    {
+        n_bytes_readable = wr_idx - rd_idx;
+    }
 
-    return _get_ring_distance(bytesRead, bytesWritten , ring->size);
+    return n_bytes_readable;
 }
 
 unsigned int ring_buffer_n_bytes_writable(const ring_buffer_t* ring)
 {
-    unsigned int bytesRead, bytesWritten;
+    unsigned int wr_idx, rd_idx, n_bytes_writable = 0;
     TRACE("");
-    bytesRead = atomic_read(&ring->_impl_p->read_idx);
-    bytesWritten = atomic_read(&ring->_impl_p->write_idx);
+    wr_idx = atomic_read(&ring->_impl_p->write_idx);
+    rd_idx = atomic_read(&ring->_impl_p->read_idx);
 
-    return _get_ring_distance(bytesWritten, bytesRead, ring->size);
+    if (rd_idx > wr_idx)
+    {
+        n_bytes_writable = rd_idx - wr_idx;
+    }
+    else
+    {
+        n_bytes_writable = ring->size - (wr_idx - rd_idx); // = size - bytes_not_writable
+    }
+
+    return n_bytes_writable;
 }
 
 ring_buffer_t* get_ring_buffer(const unsigned int size)
