@@ -59,6 +59,7 @@ static int _remove_pcm3060_device(struct device *pdev)
     // ret |= clock_generator_cleanup(pdev);
     ret |= tx_cleanup(pdev);
     put_device(_pcm3060_i.pdev);
+    _pcm3060_i.pdev = NULL;
     return ret;
 }
 

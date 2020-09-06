@@ -16,8 +16,11 @@
 #define DEVICETREE_PCM3060_COMPATIBLE "ext_pcm3060"
 #define DEVICETREE_PCM3060_SCK_PWM_NAME "pwm_pcm3060"
 #define DEVICETREE_PCM3060_SPI_NAME "spi_pcm3060"
+#define DEVICETREE_PCM3060_GPIO_LRCK_NAME "gpio_lrck_pcm3060"
 
 struct device* dt_find_pcm3060_device(void);
+// call gpio_free when finished!
+int get_gpio(struct device *dev, const char * name, int * pGPIOnum_o);
 
 #endif /* IS_ENABLED(CONFIG_OF) */
 #endif // !KERNELMODULE_PCM3060_PERIPHERY_DEVICETREE_H

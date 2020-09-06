@@ -14,12 +14,13 @@
 #include <linux/slab.h>
 #include <linux/kthread.h>
 #include <linux/completion.h>
+#include <linux/gpio.h>
 
 #include <linux/delay.h> // todo RM
 #include <linux/jiffies.h> // todo RM
 
-#define SPIMODE_LEFT_CHANNEL  SPI_CS_HIGH | SPI_MODE_3  // CHIP select high when active, CPOL = 1, CPHA = 1
-#define SPIMODE_RIGHT_CHANNEL SPI_MODE_3                // CPOL = 1, CPHA = 1
+// #define SPIMODE_LEFT_CHANNEL  SPI_CS_HIGH | SPI_MODE_3  // CHIP select high when active, CPOL = 1, CPHA = 1
+// #define SPIMODE_RIGHT_CHANNEL SPI_MODE_3                // CPOL = 1, CPHA = 1
 
 static struct task_struct* etx_spi_thread;
 DECLARE_COMPLETION(tx_completion);
@@ -30,21 +31,16 @@ static struct _thread_in_data
     struct spi_device* spiDev;
     duplex_ring_end_t* leftchan_buf;
     duplex_ring_end_t* rightchan_buf;
-} _internal_data = {NULL, NULL, NULL};
-
-// typedef union
-// {
-//     u32 word;
-//     u8 bytes[4];
-// } ;
+    int gpio_num;
+} _internal_data = {NULL, NULL, NULL, 0};
 
 
-static int _tx_rx_on_channel(duplex_ring_end_t* active_channel, unsigned int lrck_low)
+static int _tx_rx_on_channel(duplex_ring_end_t* active_channel, unsigned int lrck_level)
 {
     unsigned int n_bytes_to_write_over_spi = 0, n_bytes_to_read_from_spi = 0;
     int ret = 0;
-    // u8 mem_tx[CONFIG_SPI_N_BYTE_PER_TX] = {0}, mem_rx[CONFIG_SPI_N_BYTE_PER_TX] = {0};
-     u32 mem_tx[1] = {0}, mem_rx[1] = {0};
+    u8 mem_tx[CONFIG_SPI_N_BYTE_PER_TX] = {0}, mem_rx[CONFIG_SPI_N_BYTE_PER_TX] = {0};
+    //  u32 mem_tx[1] = {0}, mem_rx[1] = {0};
 
     if ( (n_bytes_to_write_over_spi = duplex_ring_end_n_bytes_readable(active_channel)) > 0)
     {
@@ -76,7 +72,15 @@ static int _tx_rx_on_channel(duplex_ring_end_t* active_channel, unsigned int lrc
     }
     else
     {
-        // _internal_data.spiDev-> setCs ? directly?
+        // _internal_data.spiDev->master->set_cs(_internal_data.spiDev, lrck_level); // TODO rename for newer kernels
+        // TRACE("%p",_internal_data.spiDev->master);
+        // if (_internal_data.spiDev->master)
+        // {
+        //     TRACE("%p",_internal_data.spiDev->master->set_cs);
+        // }
+        TRACE ("Setting lrck gpio to %d", lrck_level);
+        gpio_set_value_cansleep(_internal_data.gpio_num,lrck_level);
+
         TRACE("Reading %d and writting %d bytes...", n_bytes_to_read_from_spi, n_bytes_to_write_over_spi);
         // spi_write_then_read(_internal_data.spiDev, mem_tx, CONFIG_SPI_N_BYTE_PER_TX, mem_rx, CONFIG_SPI_N_BYTE_PER_TX);
         struct spi_transfer	t = {
@@ -84,7 +88,6 @@ static int _tx_rx_on_channel(duplex_ring_end_t* active_channel, unsigned int lrc
         .rx_buf		= mem_rx,
         .len		= CONFIG_SPI_N_BYTE_PER_TX,
          .bits_per_word = CONFIG_SPI_WORD_LEN,
-        // .cs_change = lrck_low,          //TODO rm this does not work
 		};
 
 	    spi_sync_transfer(_internal_data.spiDev, &t, 1);  //TODO async speedup
@@ -124,7 +127,7 @@ static int _tx_run(void* unused)
         //     return -ENXIO;
         // }
         TRACE("LCHAN");
-        err = _tx_rx_on_channel(_internal_data.leftchan_buf,1);
+        err = _tx_rx_on_channel(_internal_data.leftchan_buf,0);
         //TOGGLE SPI
 
         // TRACE("SETUP");
@@ -135,7 +138,7 @@ static int _tx_run(void* unused)
         //     return -ENXIO;
         // }
         TRACE("RCHAN");
-        err |= _tx_rx_on_channel(_internal_data.rightchan_buf,0);
+        err |= _tx_rx_on_channel(_internal_data.rightchan_buf,1);
 
         if(err)
         {
@@ -157,12 +160,26 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
     if ((pdev == NULL) || (leftchan_buf == NULL) || (rightchan_buf == NULL))
     {
         ERROR("Invalid (nullptr) arguments!");
-        return 1;
+        return -1;
     }
     _internal_data.leftchan_buf = leftchan_buf;
     _internal_data.rightchan_buf = rightchan_buf;
 
-    INFO("Requesting SPI for ADC");
+
+
+    INFO("Requesting GPIO for LRCK");
+    if (get_gpio(pdev, DEVICETREE_PCM3060_GPIO_LRCK_NAME, &_internal_data.gpio_num))
+    {
+        ERROR("Failed to get the gpio pin for LRCK clock!");
+        return -1;
+    }
+    else if (gpio_direction_output(_internal_data.gpio_num, 0))
+    {
+        ERROR("Failed to set the gpio pin for LRCK clock as output!");
+        return -1;
+    }
+
+    INFO("Requesting SPI for transmitting");
     ext_spi_dev = spi_get(pdev, DEVICETREE_PCM3060_SPI_NAME);
     if (!ext_spi_dev)
     {
@@ -213,7 +230,7 @@ r_device:
 int tx_cleanup(struct device *pdev)
 {
     //TODO checks...
-    INFO("Cleaning up transceiver....");
+    TRACE("Cleaning up transceiver....");
     if (etx_spi_thread != NULL)
     {
         INFO("Stopping thread %p ...", etx_spi_thread);
@@ -225,6 +242,11 @@ int tx_cleanup(struct device *pdev)
     {
         WARNING("No kernel thread...");
     }
+
+
+    TRACE("Freeing GPIO %d", _internal_data.gpio_num);
+    gpio_free(_internal_data.gpio_num);
+
     if (_internal_data.spiDev != NULL)
     {
         TRACE("Removing SPI device..");

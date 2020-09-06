@@ -7,6 +7,7 @@
 #include <linux/version.h>
 #include <linux/device.h>
 #include <linux/of.h>
+#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <utils/devicetree.h>
 
@@ -34,4 +35,44 @@ struct device* dt_find_pcm3060_device(void)
     return dev;
 }
 
-#endif /* IS_ENABLED(CONFIG_OF) */
+int get_gpio(struct device *dev, const char * name, int * pGPIOnum_o)
+{
+    int n_pins,pin_id_it;
+    int err = 0;
+    struct device_node * pDN  = dev->of_node;
+    TRACE("Searching gpio named %s", name);
+
+    *pGPIOnum_o = 0;
+
+    // parse pins
+    n_pins = of_gpio_named_count(pDN, name);
+    if (n_pins <= 0)
+    {
+        TRACE("no gpios found");
+        return -1;
+    }
+
+    for (pin_id_it = 0; pin_id_it < n_pins; pin_id_it++)
+    {
+        // get pin number
+        *pGPIOnum_o = of_get_named_gpio(pDN,name, pin_id_it);
+        if (*pGPIOnum_o == -EPROBE_DEFER)
+        {
+            return err;
+        }
+        // check if pin number is valid
+        if (gpio_is_valid(*pGPIOnum_o))
+        {
+            // yes
+            // request pin
+            if ( (err = devm_gpio_request(dev, *pGPIOnum_o, name)) )
+            {
+                return err;
+            }
+            break;
+        }
+    }
+    return err;
+}
+
+#endif
