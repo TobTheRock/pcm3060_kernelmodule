@@ -16,14 +16,16 @@ static struct pwm_device* dev_pwm_sck;
 
 int clock_generator_init(struct device *pdev, const unsigned int frequency)
 {
-    int ret = 0,
-        period = HZ_TO_NS(frequency);
+    TRACE("");
+    int ret = 0;
+    unsigned int period = HZ_TO_NS(frequency);
     struct pwm_state new_sck1_state = {
         .period = period,
         .polarity = PWM_POLARITY_NORMAL
+        , .enabled = 1
     };
 
-    TRACE("Frequency %d Hz", frequency);
+    TRACE("Frequency %d Hz, period %d ns", frequency, period);
 
     if (!pdev)
     {

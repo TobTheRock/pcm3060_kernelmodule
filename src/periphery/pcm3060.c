@@ -38,12 +38,11 @@ static int _probe_pcm3060_device(struct device *pdev)
 {
     int ret = 0;
     TRACE("");
-    // if ( (ret = clock_generator_init(pdev, CONFIG_GET_CLOCK_SCK_F_HZ(_pcm3060_i.config->fs))) )
-    // {
-    //     ERROR("Failed to initialize CLOCK!");
-    // }
-    // else
-    if ( (ret = tx_init(pdev, _pcm3060_i.left_chan_buffer->right_end, _pcm3060_i.right_chan_buffer->right_end)) )
+    if ( (ret = clock_generator_init(pdev, CONFIG_GET_CLOCK_SCK_F_HZ(_pcm3060_i.config->fs))) )
+    {
+        ERROR("Failed to initialize CLOCK!");
+    }
+    else if ( (ret = tx_init(pdev, _pcm3060_i.left_chan_buffer->right_end, _pcm3060_i.right_chan_buffer->right_end, CONFIG_GET_CLOCK_BCK_F_HZ(_pcm3060_i.config->fs))) )
     {
         ERROR("Failed to initialize TRANSCEIVER!");
     }
@@ -56,7 +55,7 @@ static int _remove_pcm3060_device(struct device *pdev)
 {
     int ret = 0;
     TRACE("");
-    // ret |= clock_generator_cleanup(pdev);
+    ret |= clock_generator_cleanup(pdev);
     ret |= tx_cleanup(pdev);
     put_device(_pcm3060_i.pdev);
     _pcm3060_i.pdev = NULL;

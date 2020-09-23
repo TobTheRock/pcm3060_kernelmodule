@@ -2,3 +2,4 @@ linux-*
 toolchain
 build
 .vscode
+eval/*

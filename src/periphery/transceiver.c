@@ -16,6 +16,8 @@
 #include <linux/completion.h>
 #include <linux/gpio.h>
 
+#include <linux/semaphore.h>
+
 #include <linux/delay.h> // todo RM
 #include <linux/jiffies.h> // todo RM
 
@@ -24,6 +26,7 @@
 
 static struct task_struct* etx_spi_thread;
 DECLARE_COMPLETION(tx_completion);
+DEFINE_SEMAPHORE(spi_completion);
 
 //TODO keep this static ?
 static struct _thread_in_data
@@ -32,14 +35,37 @@ static struct _thread_in_data
     duplex_ring_end_t* leftchan_buf;
     duplex_ring_end_t* rightchan_buf;
     int gpio_num;
-} _internal_data = {NULL, NULL, NULL, 0};
+}
+
+_internal_data = {NULL, NULL, NULL, 0};
+
+u8 mem_tx[CONFIG_SPI_N_BYTE_PER_TX] = {0}, mem_rx[CONFIG_SPI_N_BYTE_PER_TX] = {0};
+
+struct spi_transfer	t;
+
+static void spi_complete(void *context) // TODO context
+{
+    static u8 lrck_level = 0;
+
+    TRACE("");
+    // if (context != NULL)
+    // {
+    //     u8* mem_rx = *(u8**)context;
+    //     TRACE("Got  %d %d %d %d...", * (u8*)mem_rx, *(u8*)(mem_rx+1), *(u8*)(mem_rx+2), *(u8*)(mem_rx+3));
+    //     duplex_ring_end_write(_internal_data.leftchan_buf, mem_rx, CONFIG_SPI_N_BYTE_PER_TX);
+    // }
+
+    gpio_set_value(_internal_data.gpio_num,lrck_level);
+    up(&spi_completion);
+
+    lrck_level = !lrck_level;
+}
 
 
 static int _tx_rx_on_channel(duplex_ring_end_t* active_channel, unsigned int lrck_level)
 {
     unsigned int n_bytes_to_write_over_spi = 0, n_bytes_to_read_from_spi = 0;
     int ret = 0;
-    u8 mem_tx[CONFIG_SPI_N_BYTE_PER_TX] = {0}, mem_rx[CONFIG_SPI_N_BYTE_PER_TX] = {0};
     //  u32 mem_tx[1] = {0}, mem_rx[1] = {0};
 
     if ( (n_bytes_to_write_over_spi = duplex_ring_end_n_bytes_readable(active_channel)) > 0)
@@ -72,6 +98,8 @@ static int _tx_rx_on_channel(duplex_ring_end_t* active_channel, unsigned int lrc
     }
     else
     {
+
+        // down(&spi_completion);
         // _internal_data.spiDev->master->set_cs(_internal_data.spiDev, lrck_level); // TODO rename for newer kernels
         // TRACE("%p",_internal_data.spiDev->master);
         // if (_internal_data.spiDev->master)
@@ -79,25 +107,37 @@ static int _tx_rx_on_channel(duplex_ring_end_t* active_channel, unsigned int lrc
         //     TRACE("%p",_internal_data.spiDev->master->set_cs);
         // }
         TRACE ("Setting lrck gpio to %d", lrck_level);
-        gpio_set_value_cansleep(_internal_data.gpio_num,lrck_level);
 
         TRACE("Reading %d and writting %d bytes...", n_bytes_to_read_from_spi, n_bytes_to_write_over_spi);
         // spi_write_then_read(_internal_data.spiDev, mem_tx, CONFIG_SPI_N_BYTE_PER_TX, mem_rx, CONFIG_SPI_N_BYTE_PER_TX);
-        struct spi_transfer	t = {
-        .tx_buf		= mem_tx,
-        .rx_buf		= mem_rx,
-        .len		= CONFIG_SPI_N_BYTE_PER_TX,
-         .bits_per_word = CONFIG_SPI_WORD_LEN,
-		};
+        t.tx_buf		= mem_tx;
+        t.rx_buf		= mem_rx;
+        t.len		= CONFIG_SPI_N_BYTE_PER_TX;
+        t.bits_per_word = CONFIG_SPI_WORD_LEN;
 
-	    spi_sync_transfer(_internal_data.spiDev, &t, 1);  //TODO async speedup
-        TRACE("Got  %d %d %d %d...", * (u8*)mem_rx, *(u8*)(mem_rx+1), *(u8*)(mem_rx+2), *(u8*)(mem_rx+3));
-        // TRACE("Got  %d ...", *mem_rx);
+
+	    // spi_sync_transfer(_internal_data.spiDev, &t, 1);  //TODO async speedup // TODO multi transfers!
+
+        struct spi_message msg;
+        
         if (n_bytes_to_read_from_spi)
         {
-            TRACE("Writing to RX ring buffer...");
-            duplex_ring_end_write(active_channel, mem_rx, n_bytes_to_read_from_spi); // TODO bytes dropped?
+            TRACE("Setting context");
+            msg.context = &mem_rx;
         }
+	    spi_message_init_with_transfers(&msg, &t, 1);
+        msg.complete = &spi_complete;
+        spi_async(_internal_data.spiDev, &msg);
+
+
+
+        // TRACE("Got  %d %d %d %d...", * (u8*)mem_rx, *(u8*)(mem_rx+1), *(u8*)(mem_rx+2), *(u8*)(mem_rx+3));
+        // TRACE("Got  %d ...", *mem_rx);
+        // if (n_bytes_to_read_from_spi)
+        // {
+            // TRACE("Writing to RX ring buffer...");
+            // duplex_ring_end_write(active_channel, mem_rx, n_bytes_to_read_from_spi); // TODO bytes dropped?
+        // }
     }
 
     return ret;
@@ -152,7 +192,7 @@ static int _tx_run(void* unused)
     return 0;
 }
 
-int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_end_t* rightchan_buf)
+int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_end_t* rightchan_buf, const unsigned long f_bck)
 {
     
     struct spi_device* ext_spi_dev;
@@ -197,7 +237,7 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
         INFO("SPI device  Master freq rang  %d - %d HZ", ext_spi_dev->master->min_speed_hz, ext_spi_dev->master->max_speed_hz);
 
         _internal_data.spiDev = ext_spi_dev;
-        ext_spi_dev->max_speed_hz = 50000;
+        ext_spi_dev->max_speed_hz = f_bck;
         ext_spi_dev->bits_per_word = CONFIG_SPI_WORD_LEN;
         // ext_spi_dev->max_speed_hz = CONFIG_ADC_CLOCK_BCK1_F_HZ;
         ext_spi_dev->mode = SPI_MODE_3; // CPOL = 1, CPHA = 1
@@ -211,6 +251,7 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
     }
 
 
+    // up(&spi_completion);
     etx_spi_thread = kthread_run(_tx_run,NULL,"Transceiver Thread");
     if(IS_ERR(etx_spi_thread))
     {
@@ -218,6 +259,7 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
         etx_spi_thread = NULL;
         goto r_device;
     }
+
 
 //pdev->dev->->of_node
 // then read the property---
@@ -231,6 +273,8 @@ int tx_cleanup(struct device *pdev)
 {
     //TODO checks...
     TRACE("Cleaning up transceiver....");
+    up(&spi_completion);
+    up(&spi_completion);
     if (etx_spi_thread != NULL)
     {
         INFO("Stopping thread %p ...", etx_spi_thread);

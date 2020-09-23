@@ -19,5 +19,6 @@
         pwm-names = "pwm_pcm3060_sck";
         spis = <&spidev>;
         spi-names = "spi_pcm3060";
+        gpio_lrck_pcm3060 = <&gpio GPIOA_4 GPIO_ACTIVE_HIGH>;
     };
 };

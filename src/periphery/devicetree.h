@@ -14,7 +14,7 @@
 
 /*-------------------------------- Device Tree Settings ------------------------------------*/
 #define DEVICETREE_PCM3060_COMPATIBLE "ext_pcm3060"
-#define DEVICETREE_PCM3060_SCK_PWM_NAME "pwm_pcm3060"
+#define DEVICETREE_PCM3060_SCK_PWM_NAME "pwm_pcm3060_sck"
 #define DEVICETREE_PCM3060_SPI_NAME "spi_pcm3060"
 #define DEVICETREE_PCM3060_GPIO_LRCK_NAME "gpio_lrck_pcm3060"
 
