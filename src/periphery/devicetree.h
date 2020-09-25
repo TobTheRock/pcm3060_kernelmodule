@@ -17,6 +17,9 @@
 #define DEVICETREE_PCM3060_SCK_PWM_NAME "pwm_pcm3060_sck"
 #define DEVICETREE_PCM3060_SPI_NAME "spi_pcm3060"
 #define DEVICETREE_PCM3060_GPIO_LRCK_NAME "gpio_lrck_pcm3060"
+#define DEVICETREE_PCM3060_GPIO_BCK_NAME "gpio_bck_pcm3060"
+#define DEVICETREE_PCM3060_GPIO_DIN_NAME "gpio_din_pcm3060"
+#define DEVICETREE_PCM3060_GPIO_DOUT_NAME "gpio_dout_pcm3060"
 
 struct device* dt_find_pcm3060_device(void);
 // call gpio_free when finished!
