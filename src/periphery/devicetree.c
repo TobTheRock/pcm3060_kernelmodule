@@ -65,7 +65,7 @@ int get_gpio(struct device *dev, const char * name, int * pGPIOnum_o)
         {
             // yes
             // request pin
-            if ( (err = devm_gpio_request(dev, *pGPIOnum_o, name)) )
+            if ( (err = gpio_request(*pGPIOnum_o, name)) )
             {
                 return err;
             }

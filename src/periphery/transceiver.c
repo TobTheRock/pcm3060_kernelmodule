@@ -40,9 +40,7 @@ enum hrtimer_restart timer_callback(struct hrtimer *timer)
     // printk(KERN_INFO "Timer Callback function Called \n");
 
     // Toggle bck clock
-    // gpio_set_value(_gpio_num_bck, _current_bck_val);
-    gpio_set_value(_gpio_num_lrck, _current_bck_val);
-    // gpio_set_value(_gpio_num_dout, _current_bck_val);
+    gpio_set_value(_gpio_num_bck, _current_bck_val);
     _current_bck_val = !_current_bck_val;
 
     hrtimer_forward_now(timer, ktime_set(0,_T_bck_ns));
@@ -58,15 +56,21 @@ static int _get_and_set_gpio(struct device *pdev, int* gpio_num, const char* nam
         return -1;
     }
 
-    if (is_output && gpio_direction_output(*gpio_num, 0))
+    if (is_output)
     {
-        ERROR("Failed to set the gpio pin as output!");
-        return -1;
+        if (gpio_direction_output(*gpio_num, 0))
+        {
+            ERROR("Failed to set the gpio pin as output!");
+            return -1;
+        }
     }
-    else if (gpio_direction_input(*gpio_num))
+    else
     {
-        ERROR("Failed to set the gpio pin as input!");
-        return -1;
+        if (gpio_direction_input(*gpio_num))
+        {
+            ERROR("Failed to set the gpio pin as input!");
+            return -1;
+        }
     }
 
     return 0;
@@ -87,27 +91,28 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
 
     _T_bck_ns = HZ_TO_NS(f_bck);
 
-    if (_get_and_set_gpio(pdev, &_gpio_num_lrck, DEVICETREE_PCM3060_GPIO_LRCK_NAME, 1))
+    TRACE("Triggering BCK at %lu hz", _T_bck_ns);
+
+    if (_get_and_set_gpio(pdev, &_gpio_num_lrck, DEVICETREE_PCM3060_GPIO_LRCK_NAME, true))
     {
         ERROR("Failed to get the gpio pin for LRCK clock!");
         return -1;
     }
-    else if (_get_and_set_gpio(pdev, &_gpio_num_bck, DEVICETREE_PCM3060_GPIO_BCK_NAME, 1))
+    else if (_get_and_set_gpio(pdev, &_gpio_num_bck, DEVICETREE_PCM3060_GPIO_BCK_NAME, true))
     {
         ERROR("Failed to get the gpio pin for BCK clock!");
         return -1;
     }
-    else if (_get_and_set_gpio(pdev, &_gpio_num_din, DEVICETREE_PCM3060_GPIO_DIN_NAME, 1))
+    else if (_get_and_set_gpio(pdev, &_gpio_num_din, DEVICETREE_PCM3060_GPIO_DIN_NAME, true))
     {
         ERROR("Failed to get the gpio pin for DIN input of PCM3060!");
         return -1;
     }
-    else if (_get_and_set_gpio(pdev, &_gpio_num_dout, DEVICETREE_PCM3060_GPIO_DOUT_NAME, 0))
+    else if (_get_and_set_gpio(pdev, &_gpio_num_dout, DEVICETREE_PCM3060_GPIO_DOUT_NAME, false))
     {
         ERROR("Failed to get the gpio pin for DOUT output of PCM3060!");
         return -1;
     }
-
     INFO("GPIO IDs for:\n LRCK:%d\n BCK:%d\n  DIN:%d\n DOUT:%d\n", _gpio_num_lrck, _gpio_num_bck, _gpio_num_din, _gpio_num_dout);
 
     ktime = ktime_set(0, _T_bck_ns);
