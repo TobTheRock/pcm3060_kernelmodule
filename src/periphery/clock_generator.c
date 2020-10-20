@@ -3,7 +3,7 @@
 #include "devicetree.h"
 #include <linux/pwm.h>
 #include <utils/logging.h>
-#include <utils/conversions.h>
+#include <utils/functions.h>
 
 //#include <linux/gpio.h> // TODO move to own file
 

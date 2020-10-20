@@ -9,12 +9,14 @@
 #include <config.h>
 #include <utils/ptr.h>
 #include <utils/logging.h>
-#include <utils/conversions.h>
+#include <utils/functions.h>
 
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/hrtimer.h>
+
+#define _BCK_LRCK_RATIO ((CONFIG_RATIO_BCK_FS_HZ)/(CONFIG_RATIO_LRCK_FS_HZ))
 
 static struct hrtimer etx_hr_timer;
 
@@ -31,7 +33,11 @@ static  unsigned long _T_bck_ns;
 
 enum hrtimer_restart timer_callback(struct hrtimer *timer)
 {
-    static int _current_bck_val = 0; 
+    static bool current_bck_val = 0;
+    static bool current_lrck_val = 0;
+    static unsigned int current_lrck_cnt = 0;
+    static unsigned char data_byte_mask = 0b00000001;
+
 
     // TRACE("Transceiver bit bang timer callback triggered, BCK %d ", _current_bck_val);
 
@@ -40,8 +46,19 @@ enum hrtimer_restart timer_callback(struct hrtimer *timer)
     // printk(KERN_INFO "Timer Callback function Called \n");
 
     // Toggle bck clock
-    gpio_set_value(_gpio_num_bck, _current_bck_val);
-    _current_bck_val = !_current_bck_val;
+    gpio_set_value(_gpio_num_bck, current_bck_val);
+    current_bck_val = !current_bck_val;
+
+    //toggle lrck clock respectevily
+    if (!(++current_lrck_cnt % _BCK_LRCK_RATIO))
+    {
+        gpio_set_value(_gpio_num_lrck, current_lrck_val);
+        current_lrck_val = !current_lrck_val;
+        current_lrck_cnt = 0;// should be no need for that
+    }
+
+    data_byte_mask = CYCLE_SHIFT(data_byte_mask, 1);
+    TRACE("byte mask %d", data_byte_mask);
 
     hrtimer_forward_now(timer, ktime_set(0,_T_bck_ns));
     return HRTIMER_RESTART;
