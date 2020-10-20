@@ -31,15 +31,27 @@ static  unsigned long _T_bck_ns;
 
 enum hrtimer_restart timer_callback(struct hrtimer *timer)
 {
+    static int _current_bck_val = 0; 
+
+    // TRACE("Transceiver bit bang timer callback triggered, BCK %d ", _current_bck_val);
+
+
      /* do your timer stuff here */
-    printk(KERN_INFO "Timer Callback function Called \n");
-    hrtimer_forward_now(timer,ktime_set(0,_T_bck_ns));
+    // printk(KERN_INFO "Timer Callback function Called \n");
+
+    // Toggle bck clock
+    // gpio_set_value(_gpio_num_bck, _current_bck_val);
+    gpio_set_value(_gpio_num_lrck, _current_bck_val);
+    // gpio_set_value(_gpio_num_dout, _current_bck_val);
+    _current_bck_val = !_current_bck_val;
+
+    hrtimer_forward_now(timer, ktime_set(0,_T_bck_ns));
     return HRTIMER_RESTART;
 }
 
 static int _get_and_set_gpio(struct device *pdev, int* gpio_num, const char* name, bool is_output)
 {
-    TRACE("Requesting GPIO %s", name)
+    TRACE("Requesting GPIO %s", name);
     if (get_gpio(pdev, name , gpio_num))
     {
         ERROR("Failed to aquire GPIO %s ", name);
@@ -96,7 +108,7 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
         return -1;
     }
 
-    INFO("GPIO IDs for:\n LRCK:%d\n BCK:%d\n,  DIN:%d\n, DOUT:%d\n", _gpio_num_lrck, _gpio_num_bck, _gpio_num_din, _gpio_num_dout);
+    INFO("GPIO IDs for:\n LRCK:%d\n BCK:%d\n  DIN:%d\n DOUT:%d\n", _gpio_num_lrck, _gpio_num_bck, _gpio_num_din, _gpio_num_dout);
 
     ktime = ktime_set(0, _T_bck_ns);
     hrtimer_init(&etx_hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
@@ -109,6 +121,10 @@ int tx_init(struct device *pdev, duplex_ring_end_t* leftchan_buf, duplex_ring_en
 int tx_cleanup(struct device *pdev)
 {
     hrtimer_cancel(&etx_hr_timer);
+    gpio_free(_gpio_num_lrck);
+    gpio_free(_gpio_num_bck);
+    gpio_free(_gpio_num_din);
+    gpio_free(_gpio_num_dout);
     
     return 0;
 }
