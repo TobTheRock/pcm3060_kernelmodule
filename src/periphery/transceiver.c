@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/hrtimer.h>
+#include <linux/types.h>
 
 #define _BCK_LRCK_RATIO ((CONFIG_RATIO_BCK_FS_HZ)/(CONFIG_RATIO_LRCK_FS_HZ))
 
@@ -36,8 +37,13 @@ enum hrtimer_restart timer_callback(struct hrtimer *timer)
     static bool current_bck_val = 0;
     static bool current_lrck_val = 0;
     static unsigned int current_lrck_cnt = 0;
-    static unsigned char data_byte_mask = 0b00000001;
+    static u8 data_byte_mask = 0b00000001;
 
+    static u8 byte_rx;
+    static u8 byte_tx;
+    duplex_ring_end_t *current_chan;
+    // unsigned int n_bytes_toread;
+    // unsigned int n_bytes_to_write;
 
     // TRACE("Transceiver bit bang timer callback triggered, BCK %d ", _current_bck_val);
 
@@ -54,12 +60,28 @@ enum hrtimer_restart timer_callback(struct hrtimer *timer)
     {
         gpio_set_value(_gpio_num_lrck, current_lrck_val);
         current_lrck_val = !current_lrck_val;
-        current_lrck_cnt = 0;// should be no need for that
+        current_lrck_cnt = 0;// should be no need for that -> TODO check
+    }
+
+    // TODO check rw overhead! -> new thread for writting, reading (buffer is directly connect to user!)?
+    current_chan = current_lrck_val ? _rightchan_buf : _leftchan_buf; //Low:left high:right TODO check
+    if (data_byte_mask == 0b00000001)
+    {
+        byte_tx = 0;
+        duplex_ring_end_read(current_chan, &byte_tx, 1);
+    }
+
+    gpio_set_value(_gpio_num_din, byte_tx&data_byte_mask); // din is output seen from pcm3060
+    byte_rx = gpio_get_value(_gpio_num_dout)&data_byte_mask; // dout is input seen from pcm3060
+
+
+    if (data_byte_mask == 0b10000000)
+    {
+        duplex_ring_end_write(current_chan, &byte_rx, 1);
+        byte_rx = 0;
     }
 
     data_byte_mask = CYCLE_SHIFT(data_byte_mask, 1);
-    TRACE("byte mask %d", data_byte_mask);
-
     hrtimer_forward_now(timer, ktime_set(0,_T_bck_ns));
     return HRTIMER_RESTART;
 }
